@@ -56,7 +56,6 @@ export default async function handler(req, res) {
       if (r.status !== 429 && r.status !== 404 && r.status !== 400) break;
     }
 
-    const data = await r.json();
     if (!r.ok) {
       // Xatoni chatda ko'rinadigan qilib qaytaramiz (sababni aniqlash uchun)
       const msg = "XATO: " + (data.error?.message || JSON.stringify(data).slice(0, 300));
