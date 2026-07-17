@@ -39,13 +39,17 @@ export default async function handler(req, res) {
       }
     );
     const data = await r.json();
-    if (!r.ok) return res.status(r.status).json({ error: data.error?.message || "API xatosi" });
+    if (!r.ok) {
+      // Xatoni chatda ko'rinadigan qilib qaytaramiz (sababni aniqlash uchun)
+      const msg = "XATO: " + (data.error?.message || JSON.stringify(data).slice(0, 300));
+      return res.status(200).json({ content: [{ type: "text", text: msg }] });
+    }
 
     const text = (data.candidates?.[0]?.content?.parts || [])
       .map(p => p.text || "")
       .join("");
-    return res.status(200).json({ content: [{ type: "text", text }] });
+    return res.status(200).json({ content: [{ type: "text", text: text || "XATO: Gemini bo'sh javob qaytardi: " + JSON.stringify(data).slice(0, 300) }] });
   } catch (e) {
-    return res.status(500).json({ error: "Server xatosi" });
+    return res.status(200).json({ content: [{ type: "text", text: "XATO (server): " + (e.message || e) }] });
   }
 }
