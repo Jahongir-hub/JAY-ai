@@ -25,19 +25,37 @@ export default async function handler(req, res) {
       contents.push({ role, parts });
     }
 
-    const r = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=" +
-        process.env.GEMINI_API_KEY,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: system || "" }] },
-          contents,
-          generationConfig: { maxOutputTokens: Math.min(max_tokens || 4000, 8000) },
-        }),
-      }
-    );
+    // Modellar zanjiri: biri limitga yetsa, keyingisi sinaladi
+    const MODELS = [
+      "gemini-3.1-flash-lite",
+      "gemini-flash-lite-latest",
+      "gemini-2.0-flash-lite",
+      "gemma-4-26b-a4b-it",
+      "gemma-4-31b-it",
+    ];
+
+    let r = null, data = null, lastErr = "";
+    for (const model of MODELS) {
+      r = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" +
+          process.env.GEMINI_API_KEY,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: system || "" }] },
+            contents,
+            generationConfig: { maxOutputTokens: Math.min(max_tokens || 4000, 8000) },
+          }),
+        }
+      );
+      data = await r.json();
+      if (r.ok) break; // Ishladi — to'xtaymiz
+      lastErr = data.error?.message || "";
+      // Limit (429) yoki model topilmadi (404) bo'lsa — keyingisini sinaymiz
+      if (r.status !== 429 && r.status !== 404 && r.status !== 400) break;
+    }
+
     const data = await r.json();
     if (!r.ok) {
       // Xatoni chatda ko'rinadigan qilib qaytaramiz (sababni aniqlash uchun)
