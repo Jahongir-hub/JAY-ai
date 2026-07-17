@@ -173,7 +173,7 @@ export default function JayAI() {
   const [convs, setConvs] = useState([newConv()]);
   const [curId, setCurId] = useState(null);
   const [view, setView] = useState("chat"); // chat | artifacts | customize
-  const [settings, setSettings] = useState({ name: "Jahongir", extra: "" });
+  const [settings, setSettings] = useState({ name: "", extra: "" });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
