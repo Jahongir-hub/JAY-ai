@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { loginGoogle, logout, watchUser, saveCloud, loadCloud, listUsers } from "./firebase.js";
+import { loginGoogle, logout, watchUser, saveCloud, loadCloud, listUsers, getUserDoc, setBlocked } from "./firebase.js";
 
 // O'ZINGIZNING Google emailingizni yozing — admin panel faqat sizga ko'rinadi:
 const ADMIN_EMAIL = "j96433204@gmail.com";
@@ -217,6 +217,8 @@ export default function JayAI() {
   const [power, setPower] = useState("high"); // high | low
   const [user, setUser] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
+  const [meBlocked, setMeBlocked] = useState(false);
+  const [viewUser, setViewUser] = useState(null); // admin ko'rayotgan foydalanuvchi
   const fileRef = useRef(null);
   const endRef = useRef(null);
 
@@ -228,6 +230,8 @@ export default function JayAI() {
     return watchUser(async (u) => {
       setUser(u);
       if (u) {
+        const docData = await getUserDoc(u.uid);
+        setMeBlocked(!!docData?.blocked);
         const cloud = await loadCloud(u.uid);
         if (cloud && cloud.list && cloud.list.length) {
           setConvs(cloud.list);
@@ -382,6 +386,11 @@ export default function JayAI() {
   const send = async () => {
     const text = input.trim();
     if ((!text && files.length === 0) || loading || !cur) return;
+    if (meBlocked) {
+      updateCur(c => ({ ...c, msgs: [...c.msgs, { role: "assistant", content: "⛔ Kechirasiz, hisobingiz administrator tomonidan bloklangan." }] }));
+      setInput("");
+      return;
+    }
     const newMsgs = [...msgs, { role: "user", content: text || "Faylni ko'rib chiq", files }];
     updateCur(c => ({
       ...c, msgs: newMsgs,
@@ -767,18 +776,56 @@ export default function JayAI() {
               </div>
               {adminUsers.map(u => (
                 <div key={u.uid} style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  background: "#161618", border: "1px solid #26262B",
+                  background: "#161618", border: "1px solid " + (u.blocked ? "#C41E24" : "#26262B"),
                   borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontSize: 13,
                 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600 }}>{u.name || "Nomsiz"}</div>
-                    <div style={{ color: "#9A9AA2", fontSize: 12 }}>{u.email}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }}>
+                        {u.name || "Nomsiz"} {u.blocked && <span style={{ color: "#E5484D", fontSize: 11 }}>⛔ bloklangan</span>}
+                      </div>
+                      <div style={{ color: "#9A9AA2", fontSize: 12 }}>{u.email}</div>
+                    </div>
+                    <div style={{ color: "#9A9AA2", fontSize: 12 }}>{u.chats} chat · {u.msgs} xabar</div>
+                    <button onClick={() => setViewUser(viewUser?.uid === u.uid ? null : u)} style={{
+                      background: "#222228", border: "1px solid #3A3A40", color: "#D9D9DE",
+                      borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer",
+                    }}>{viewUser?.uid === u.uid ? "Yopish" : "👁 Ko'rish"}</button>
+                    <button onClick={async () => {
+                      await setBlocked(u.uid, !u.blocked);
+                      setAdminUsers(await listUsers());
+                    }} style={{
+                      background: u.blocked ? "#1E5C2E" : "#C41E24", border: "none", color: "#FFF",
+                      borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600,
+                    }}>{u.blocked ? "✓ Ochish" : "⛔ Bloklash"}</button>
                   </div>
-                  <div style={{ color: "#9A9AA2" }}>{u.chats} chat · {u.msgs} xabar</div>
-                  <div style={{ color: "#7A7A82", fontSize: 11 }}>
-                    {u.updated ? new Date(u.updated).toLocaleDateString() : ""}
-                  </div>
+
+                  {viewUser?.uid === u.uid && (() => {
+                    let chats = [];
+                    try { chats = JSON.parse(u.data).list || []; } catch (e) {}
+                    return (
+                      <div style={{ marginTop: 12, borderTop: "1px solid #26262B", paddingTop: 10 }}>
+                        {chats.length === 0 && <div style={{ color: "#8F8F8F", fontSize: 12 }}>Suhbatlar yo'q</div>}
+                        {chats.map((c, ci) => (
+                          <details key={ci} style={{ marginBottom: 8 }}>
+                            <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#E5484D" }}>
+                              💬 {c.title} ({(c.msgs || []).length} xabar)
+                            </summary>
+                            <div style={{ padding: "8px 0 0 14px" }}>
+                              {(c.msgs || []).map((m, mi) => (
+                                <div key={mi} style={{
+                                  fontSize: 12, marginBottom: 6, color: m.role === "user" ? "#FFF" : "#9A9AA2",
+                                  whiteSpace: "pre-wrap", wordBreak: "break-word",
+                                }}>
+                                  <b>{m.role === "user" ? "👤" : "🤖"}</b> {(m.content || "").slice(0, 500)}
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
               {adminUsers.length === 0 && (
