@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { loginGoogle, logout, watchUser, saveCloud, loadCloud, listUsers } from "./firebase.js";
 
 // O'ZINGIZNING Google emailingizni yozing — admin panel faqat sizga ko'rinadi:
-const ADMIN_EMAIL = "j96433204@gmail.com";
+const ADMIN_EMAIL = "sizning-emailingiz@gmail.com";
 
 const BASE_SYSTEM = `Sen JAY AI'san — aqlli, do'stona yordamchi. Seni ISHIMOV JAHONGIR yaratgan (JAY = "Jahongir AI Yasadi"). "Seni kim yaratgan?" deb so'rashsa, "Meni ISHIMOV JAHONGIR yaratgan" deb javob ber. Foydalanuvchi qaysi tilda yozsa, o'sha tilda javob ber (asosan o'zbek tilida). Qisqa, aniq va foydali javob ber.
 
@@ -155,12 +155,46 @@ function CodeBlock({ lang, value, onPreview }) {
   );
 }
 
-const greeting = () => {
-  const h = new Date().getHours();
-  if (h >= 5 && h < 11) return "Xayrli tong";
-  if (h >= 11 && h < 18) return "Xayrli kun";
-  if (h >= 18 && h < 23) return "Xayrli kech";
-  return "Xayrli tun";
+const LANGS = {
+  uz: {
+    newChat: "+ Yangi chat", chats: "💬 Chatlar", settings: "⚙️ Sozlash", admin: "🛠 Admin",
+    modes: "Rejimlar", recents: "Oxirgilar", login: "Google bilan kirish", logout: "Chiqish",
+    free: "{L.free}", placeholder: "JAY'ga xabar yozing...", send: "Yuborish",
+    share: "📤 Ulashish", adminPanel: "Admin panel", settingsTitle: "Sozlash",
+    nameLabel: "Ismingiz", extraLabel: "JAY uchun qo'shimcha ko'rsatma",
+    extraPh: "Masalan: har doim juda qisqa javob ber...",
+    saveNote: "O'zgarishlar avtomatik saqlanadi.",
+    langLabel: "Til / Язык / Language",
+    greet: (h) => h < 5 ? "Xayrli tun" : h < 11 ? "Xayrli tong" : h < 18 ? "Xayrli kun" : h < 23 ? "Xayrli kech" : "Xayrli tun",
+    ttsLang: "uz-UZ",
+    sysLang: "Interfeys tili: o'zbekcha. Asosan o'zbek tilida javob ber.",
+  },
+  ru: {
+    newChat: "+ Новый чат", chats: "💬 Чаты", settings: "⚙️ Настройки", admin: "🛠 Админ",
+    modes: "Режимы", recents: "Недавние", login: "Войти через Google", logout: "Выйти",
+    free: "Бесплатно · без лимита", placeholder: "Напишите JAY...", send: "Отправить",
+    share: "📤 Поделиться", adminPanel: "Админ панель", settingsTitle: "Настройки",
+    nameLabel: "Ваше имя", extraLabel: "Дополнительная инструкция для JAY",
+    extraPh: "Например: отвечай всегда кратко...",
+    saveNote: "Изменения сохраняются автоматически.",
+    langLabel: "Til / Язык / Language",
+    greet: (h) => h < 5 ? "Доброй ночи" : h < 11 ? "Доброе утро" : h < 18 ? "Добрый день" : h < 23 ? "Добрый вечер" : "Доброй ночи",
+    ttsLang: "ru-RU",
+    sysLang: "Язык интерфейса: русский. Отвечай в основном на русском языке.",
+  },
+  en: {
+    newChat: "+ New chat", chats: "💬 Chats", settings: "⚙️ Settings", admin: "🛠 Admin",
+    modes: "Modes", recents: "Recents", login: "Sign in with Google", logout: "Sign out",
+    free: "Free · unlimited", placeholder: "Message JAY...", send: "Send",
+    share: "📤 Share", adminPanel: "Admin panel", settingsTitle: "Settings",
+    nameLabel: "Your name", extraLabel: "Extra instruction for JAY",
+    extraPh: "E.g.: always answer briefly...",
+    saveNote: "Changes are saved automatically.",
+    langLabel: "Til / Язык / Language",
+    greet: (h) => h < 5 ? "Good night" : h < 11 ? "Good morning" : h < 18 ? "Good afternoon" : h < 23 ? "Good evening" : "Good night",
+    ttsLang: "en-US",
+    sysLang: "Interface language: English. Reply mainly in English.",
+  },
 };
 
 const newConv = (mode = "chat") => ({
@@ -173,7 +207,7 @@ export default function JayAI() {
   const [convs, setConvs] = useState([newConv()]);
   const [curId, setCurId] = useState(null);
   const [view, setView] = useState("chat"); // chat | artifacts | customize
-  const [settings, setSettings] = useState({ name: "", extra: "" });
+  const [settings, setSettings] = useState({ name: "Jahongir", extra: "" });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -186,6 +220,7 @@ export default function JayAI() {
   const fileRef = useRef(null);
   const endRef = useRef(null);
 
+  const L = LANGS[settings.lang] || LANGS.uz;
   const cur = convs.find(c => c.id === curId) || convs[0];
   const msgs = cur ? cur.msgs : [];
 
@@ -256,9 +291,20 @@ export default function JayAI() {
   const speak = (text) => {
     try {
       window.speechSynthesis.cancel();
-      const clean = text.replace(/```[\s\S]*?```/g, " kod ").replace(/[#*_`]/g, "");
+      const clean = text.replace(/```[\s\S]*?```/g, " ").replace(/[#*_`]/g, "");
       const u = new SpeechSynthesisUtterance(clean);
-      u.lang = "uz-UZ";
+      u.lang = L.ttsLang;
+      u.rate = 1.0;
+      u.pitch = 1.0;
+      // Tilga mos eng yaxshi ovozni tanlash (Google ovozlari sifatliroq)
+      const voices = window.speechSynthesis.getVoices();
+      const pref = L.ttsLang.slice(0, 2);
+      const best =
+        voices.find(v => v.lang.startsWith(pref) && v.name.includes("Google")) ||
+        voices.find(v => v.lang.startsWith(pref)) ||
+        voices.find(v => v.lang.startsWith("ru") && v.name.includes("Google")) ||
+        voices.find(v => v.lang.startsWith("ru"));
+      if (best) u.voice = best;
       window.speechSynthesis.speak(u);
     } catch (e) {}
   };
@@ -346,6 +392,7 @@ export default function JayAI() {
     setLoading(true);
     if (cur.mode === "image" && text) { genImage(text, newMsgs); return; }
     const system = BASE_SYSTEM
+      + "\n\n" + L.sysLang
       + (power === "low" ? "\n\nJUDA QISQA javob ber — 1-3 jumla, faqat eng muhimi." : "")
       + (MODES[cur.mode || "chat"]?.extra || "")
       + (settings.name ? `\n\nFoydalanuvchining ismi: ${settings.name}.` : "")
@@ -471,7 +518,7 @@ export default function JayAI() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                  placeholder="   "
+                  placeholder={L.placeholder}
                   rows={1}
                   style={{
                     flex: 1, resize: "none", background: "transparent", color: "#EDEDED",
@@ -495,7 +542,7 @@ export default function JayAI() {
                   border: "none", borderRadius: 12, padding: "0 20px", fontWeight: 600,
                   fontSize: 14, cursor: loading ? "default" : "pointer",
                   fontFamily: "system-ui, sans-serif",
-                }}>Yuborish</button>
+                }}>{L.send}</button>
               </div>
             </div>
   );
@@ -520,10 +567,10 @@ export default function JayAI() {
           <button onClick={() => addChat("chat")} style={{
             ...S.sideBtn, background: "#C41E24", color: "#FFF",
             fontWeight: 600, justifyContent: "center", marginBottom: 10,
-          }}>+ Yangi chat</button>
+          }}>{L.newChat}</button>
 
           <button onClick={() => setView("chat")} style={{ ...S.sideBtn, background: view === "chat" ? "#222228" : "transparent" }}>
-            💬 Chatlar
+            {L.chats}
           </button>
           <button onClick={() => setView("artifacts")} style={{ ...S.sideBtn, background: view === "artifacts" ? "#222228" : "transparent" }}>
             📦 Artifacts {artifacts.length > 0 && <span style={{
@@ -531,22 +578,22 @@ export default function JayAI() {
             }}>{artifacts.length}</span>}
           </button>
           <button onClick={() => setView("customize")} style={{ ...S.sideBtn, background: view === "customize" ? "#222228" : "transparent" }}>
-            ⚙️ Sozlash
+            {L.settings}
           </button>
           {user && user.email === ADMIN_EMAIL && (
             <button onClick={async () => { setView("admin"); setAdminUsers(await listUsers()); }}
               style={{ ...S.sideBtn, background: view === "admin" ? "#222228" : "transparent" }}>
-              🛠 Admin
+              {L.admin}
             </button>
           )}
 
-          <div style={S.sect}>Rejimlar</div>
+          <div style={S.sect}>{L.modes}</div>
           <button onClick={() => addChat("code")} style={S.sideBtn}>
             <span style={{ color: "#E5484D", fontFamily: "monospace", fontWeight: 700 }}>&lt;/&gt;</span> Code
           </button>
           <button onClick={() => addChat("design")} style={S.sideBtn}>🎨 Design</button>
 
-          <div style={S.sect}>Oxirgilar</div>
+          <div style={S.sect}>{L.recents}</div>
           <div style={{ flex: 1, overflowY: "auto" }}>
             {convs.map(c => (
               <div key={c.id} onClick={() => { setCurId(c.id); setView("chat"); }} style={{
@@ -582,7 +629,7 @@ export default function JayAI() {
                     fontSize: 13, fontWeight: 600, overflow: "hidden",
                     textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>{user.displayName || user.email}</div>
-                  <div onClick={logout} style={{ fontSize: 11, color: "#E5484D", cursor: "pointer" }}>Chiqish</div>
+                  <div onClick={logout} style={{ fontSize: 11, color: "#E5484D", cursor: "pointer" }}>{L.logout}</div>
                 </div>
               </div>
             ) : (
@@ -593,7 +640,7 @@ export default function JayAI() {
                 cursor: "pointer", fontFamily: "system-ui, sans-serif",
               }}>
                 <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 5.9 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 5.9 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C41 35.4 44 30.2 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
-                Google bilan kirish
+                {L.login}
               </button>
             )}
           </div>
@@ -611,14 +658,14 @@ export default function JayAI() {
             borderRadius: 8, padding: "5px 11px", fontSize: 15, cursor: "pointer",
           }}>☰</button>
           <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
-            {view === "artifacts" ? "Artifacts" : view === "customize" ? "Sozlash" : view === "admin" ? "Admin panel" : (cur?.title || "JAY AI")}
+            {view === "artifacts" ? "Artifacts" : view === "customize" ? L.settingsTitle : view === "admin" ? L.adminPanel : (cur?.title || "JAY AI")}
           </span>
           {view === "chat" && msgs.length > 0 && (
             <button onClick={shareChat} title="Suhbatni ulashish" style={{
               background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
               borderRadius: 8, padding: "5px 12px", fontSize: 13, cursor: "pointer",
               fontFamily: "system-ui, sans-serif",
-            }}>📤 Ulashish</button>
+            }}>{L.share}</button>
           )}
           {view === "chat" && cur?.mode && cur.mode !== "chat" && (
             <span style={{
@@ -667,21 +714,33 @@ export default function JayAI() {
         {view === "customize" && (
           <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
             <div style={{ maxWidth: 520, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
-              <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>Ismingiz</div>
+              <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>{L.langLabel}</div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                {[["uz", "O'zbekcha"], ["ru", "Русский"], ["en", "English"]].map(([code, label]) => (
+                  <button key={code} onClick={() => setSettings(st => ({ ...st, lang: code }))} style={{
+                    flex: 1, padding: "10px 0", borderRadius: 12, cursor: "pointer",
+                    fontFamily: "system-ui, sans-serif", fontSize: 13.5, fontWeight: 600,
+                    background: (settings.lang || "uz") === code ? "#C41E24" : "#161618",
+                    border: "1px solid " + ((settings.lang || "uz") === code ? "#C41E24" : "#3A3A40"),
+                    color: (settings.lang || "uz") === code ? "#FFF" : "#D9D9DE",
+                  }}>{label}</button>
+                ))}
+              </div>
+              <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>{L.nameLabel}</div>
               <input value={settings.name}
                 onChange={e => setSettings(s => ({ ...s, name: e.target.value }))}
                 style={{ ...S.inp, marginBottom: 20 }} placeholder="Ismingiz" />
 
               <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>
-                JAY uchun qo'shimcha ko'rsatma
+                {L.extraLabel}
               </div>
               <textarea value={settings.extra}
                 onChange={e => setSettings(s => ({ ...s, extra: e.target.value }))}
                 rows={5}
                 style={{ ...S.inp, resize: "vertical" }}
-                placeholder="Masalan: har doim juda qisqa javob ber, misollar bilan tushuntir..." />
+                placeholder={L.extraPh} />
               <div style={{ fontSize: 12, color: "#7A7A82", marginTop: 10 }}>
-                O'zgarishlar avtomatik saqlanadi va keyingi xabardan boshlab ishlaydi.
+                {L.saveNote}
               </div>
             </div>
           </div>
@@ -742,7 +801,7 @@ export default function JayAI() {
                       <Logo size={52} />
                     </div>
                     <div style={{ fontSize: 32, fontWeight: 500, letterSpacing: "-1px" }}>
-                      {greeting()}{settings.name ? `, ${settings.name}` : ""}
+                      {L.greet(new Date().getHours())}{settings.name ? `, ${settings.name}` : ""}
                     </div>
                     <div style={{ marginTop: 28, textAlign: "left" }}>{inputBar}</div>
                     <div style={{
