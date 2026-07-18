@@ -45,8 +45,21 @@ export async function saveCloud(uid, data, meta = {}) {
       chats: (data.list || []).length,
       msgs: (data.list || []).reduce((n, c) => n + (c.msgs?.length || 0), 0),
       updated: Date.now(),
-    });
+    }, { merge: true });
   } catch (e) {}
+}
+
+// Foydalanuvchi hujjatini to'liq olish (data + blocked)
+export async function getUserDoc(uid) {
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { return null; }
+}
+
+// Admin: bloklash / blokdan chiqarish
+export async function setBlocked(uid, blocked) {
+  try { await setDoc(doc(db, "users", uid), { blocked }, { merge: true }); } catch (e) {}
 }
 
 // Admin: barcha foydalanuvchilar ro'yxati
@@ -55,7 +68,7 @@ export async function listUsers() {
     const snap = await getDocs(collection(db, "users"));
     return snap.docs.map(d => {
       const v = d.data();
-      return { uid: d.id, name: v.name, email: v.email, chats: v.chats || 0, msgs: v.msgs || 0, updated: v.updated || 0 };
+      return { uid: d.id, name: v.name, email: v.email, chats: v.chats || 0, msgs: v.msgs || 0, updated: v.updated || 0, blocked: !!v.blocked, data: v.data || "" };
     });
   } catch (e) { return []; }
 }
