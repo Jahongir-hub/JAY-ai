@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { loginGoogle, logout, watchUser, saveCloud, loadCloud, listUsers } from "./firebase.js";
 
 // O'ZINGIZNING Google emailingizni yozing — admin panel faqat sizga ko'rinadi:
-const ADMIN_EMAIL = "sizning-emailingiz@gmail.com";
+const ADMIN_EMAIL = "j96433204@gmail.com";
 
 const BASE_SYSTEM = `Sen JAY AI'san — aqlli, do'stona yordamchi. Seni ISHIMOV JAHONGIR yaratgan (JAY = "Jahongir AI Yasadi"). "Seni kim yaratgan?" deb so'rashsa, "Meni ISHIMOV JAHONGIR yaratgan" deb javob ber. Foydalanuvchi qaysi tilda yozsa, o'sha tilda javob ber (asosan o'zbek tilida). Qisqa, aniq va foydali javob ber.
 
