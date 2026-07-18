@@ -213,7 +213,14 @@ export default function JayAI() {
   const [ready, setReady] = useState(false);
   const [preview, setPreview] = useState(null);
   const [files, setFiles] = useState([]);
-  const [sideOpen, setSideOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
+  const [sideOpen, setSideOpen] = useState(typeof window !== "undefined" ? window.innerWidth >= 768 : true);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [power, setPower] = useState("high"); // high | low
   const [user, setUser] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
@@ -444,6 +451,7 @@ export default function JayAI() {
     setConvs(cs => [c, ...cs]);
     setCurId(c.id);
     setView("chat");
+    if (isMobile) setSideOpen(false);
   };
 
   const delChat = (id, e) => {
@@ -516,12 +524,12 @@ export default function JayAI() {
                   onChange={pickFiles} style={{ display: "none" }} />
                 <button onClick={() => fileRef.current?.click()} title="Rasm yoki PDF biriktirish" style={{
                   background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
-                  borderRadius: 12, padding: "0 14px", fontSize: 17, cursor: "pointer",
+                  borderRadius: 12, padding: isMobile ? "0 9px" : "0 14px", fontSize: isMobile ? 15 : 17, cursor: "pointer",
                 }}>📎</button>
                 <button onClick={toggleMic} title="Ovoz bilan yozish" style={{
                   background: listening ? "#C41E24" : "transparent",
                   border: "1px solid " + (listening ? "#C41E24" : "#3A3A40"),
-                  color: "#D9D9DE", borderRadius: 12, padding: "0 14px", fontSize: 17, cursor: "pointer",
+                  color: "#D9D9DE", borderRadius: 12, padding: isMobile ? "0 9px" : "0 14px", fontSize: isMobile ? 15 : 17, cursor: "pointer",
                 }}>🎙</button>
                 <textarea
                   value={input}
@@ -541,17 +549,17 @@ export default function JayAI() {
                   fontSize: 12.5, cursor: "pointer", fontFamily: "system-ui, sans-serif",
                   display: "flex", alignItems: "center", gap: 4, padding: "0 6px", whiteSpace: "nowrap",
                 }}>
-                  <span style={{ fontWeight: 700, color: "#EDEDED" }}>JAY 5</span>
+                  {!isMobile && <span style={{ fontWeight: 700, color: "#EDEDED" }}>JAY 5</span>}
                   <span style={{ color: "#E5484D" }}>{power === "high" ? "High" : "Low"}</span>
                   <span style={{ fontSize: 9 }}>▼</span>
                 </button>
                 <button onClick={send} disabled={loading || (!input.trim() && files.length === 0)} style={{
                   background: loading || (!input.trim() && files.length === 0) ? "#1E1E20" : "#C41E24",
                   color: loading || (!input.trim() && files.length === 0) ? "#5A5A5A" : "#FFF",
-                  border: "none", borderRadius: 12, padding: "0 20px", fontWeight: 600,
-                  fontSize: 14, cursor: loading ? "default" : "pointer",
+                  border: "none", borderRadius: 12, padding: isMobile ? "0 13px" : "0 20px", fontWeight: 600,
+                  fontSize: isMobile ? 13 : 14, cursor: loading ? "default" : "pointer",
                   fontFamily: "system-ui, sans-serif",
-                }}>{L.send}</button>
+                }}>{isMobile ? "➤" : L.send}</button>
               </div>
             </div>
   );
@@ -562,11 +570,20 @@ export default function JayAI() {
       background: "#0C0C0E", fontFamily: "Georgia, serif", color: "#EDEDED", overflow: "hidden",
     }}>
       {/* ===== Yon panel ===== */}
+      {sideOpen && isMobile && (
+        <div onClick={() => setSideOpen(false)} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 39,
+        }} />
+      )}
       {sideOpen && (
         <div style={{
           width: 250, flexShrink: 0, background: "#111114",
           borderRight: "1px solid #26262B", display: "flex", flexDirection: "column",
           padding: "14px 10px",
+          ...(isMobile ? {
+            position: "fixed", left: 0, top: 0, bottom: 0, zIndex: 40,
+            boxShadow: "4px 0 24px rgba(0,0,0,0.5)",
+          } : {}),
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px 14px" }}>
             <Logo size={26} />
@@ -605,7 +622,7 @@ export default function JayAI() {
           <div style={S.sect}>{L.recents}</div>
           <div style={{ flex: 1, overflowY: "auto" }}>
             {convs.map(c => (
-              <div key={c.id} onClick={() => { setCurId(c.id); setView("chat"); }} style={{
+              <div key={c.id} onClick={() => { setCurId(c.id); setView("chat"); if (isMobile) setSideOpen(false); }} style={{
                 ...S.sideBtn,
                 background: c.id === cur?.id && view === "chat" ? "#222228" : "transparent",
                 justifyContent: "space-between", marginBottom: 2,
@@ -840,14 +857,14 @@ export default function JayAI() {
         {/* ==== CHAT ko'rinishi ==== */}
         {view === "chat" && (
           <>
-            <div style={{ flex: 1, overflowY: "auto", padding: "24px 16px" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px 10px" : "24px 16px" }}>
               <div style={{ maxWidth: 760, margin: "0 auto" }}>
                 {msgs.length === 0 && (
                   <div style={{ textAlign: "center", marginTop: 70 }}>
                     <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
                       <Logo size={52} />
                     </div>
-                    <div style={{ fontSize: 32, fontWeight: 500, letterSpacing: "-1px" }}>
+                    <div style={{ fontSize: isMobile ? 24 : 32, fontWeight: 500, letterSpacing: "-1px" }}>
                       {L.greet(new Date().getHours())}{settings.name ? `, ${settings.name}` : ""}
                     </div>
                     <div style={{ marginTop: 28, textAlign: "left" }}>{inputBar}</div>
