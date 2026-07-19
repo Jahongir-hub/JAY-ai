@@ -7,7 +7,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDw3sWpE0sLd_fv-Fu2d3rwsd1oQWOAD00",
@@ -62,13 +62,34 @@ export async function setBlocked(uid, blocked) {
   try { await setDoc(doc(db, "users", uid), { blocked }, { merge: true }); } catch (e) {}
 }
 
+// Istalgan maydonlarni yangilash (premium, limit, dayCount...)
+export async function setUserField(uid, fields) {
+  try { await setDoc(doc(db, "users", uid), fields, { merge: true }); } catch (e) {}
+}
+
+// Admin: foydalanuvchini butunlay o'chirish
+export async function deleteUser(uid) {
+  try { await deleteDoc(doc(db, "users", uid)); } catch (e) {}
+}
+
+// E'lon (barcha foydalanuvchilarga banner)
+export async function getAnnouncement() {
+  try {
+    const snap = await getDoc(doc(db, "meta", "announcement"));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { return null; }
+}
+export async function setAnnouncement(text) {
+  try { await setDoc(doc(db, "meta", "announcement"), { text, ts: Date.now() }); } catch (e) {}
+}
+
 // Admin: barcha foydalanuvchilar ro'yxati
 export async function listUsers() {
   try {
     const snap = await getDocs(collection(db, "users"));
     return snap.docs.map(d => {
       const v = d.data();
-      return { uid: d.id, name: v.name, email: v.email, chats: v.chats || 0, msgs: v.msgs || 0, updated: v.updated || 0, blocked: !!v.blocked, data: v.data || "" };
+      return { uid: d.id, name: v.name, email: v.email, chats: v.chats || 0, msgs: v.msgs || 0, updated: v.updated || 0, created: v.created || 0, blocked: !!v.blocked, premium: !!v.premium, adminLimit: v.adminLimit || 0, data: v.data || "" };
     });
   } catch (e) { return []; }
 }
