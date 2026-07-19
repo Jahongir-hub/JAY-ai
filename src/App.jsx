@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { loginGoogle, logout, watchUser, saveCloud, loadCloud, listUsers, getUserDoc, setBlocked } from "./firebase.js";
+import { loginGoogle, logout, watchUser, saveCloud, loadCloud, listUsers, getUserDoc, setBlocked, setUserField, deleteUser, getAnnouncement, setAnnouncement } from "./firebase.js";
 
 // O'ZINGIZNING Google emailingizni yozing — admin panel faqat sizga ko'rinadi:
 const ADMIN_EMAIL = "j96433204@gmail.com";
@@ -225,7 +225,15 @@ export default function JayAI() {
   const [user, setUser] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
   const [meBlocked, setMeBlocked] = useState(false);
-  const [viewUser, setViewUser] = useState(null); // admin ko'rayotgan foydalanuvchi
+  const [mePremium, setMePremium] = useState(false);
+  const [meLimit, setMeLimit] = useState(0);
+  const dayRef = useRef({ date: "", count: 0 });
+  const [viewUser, setViewUser] = useState(null);
+  const [ann, setAnn] = useState(null); // e'lon
+  const [annHide, setAnnHide] = useState(false);
+  const [annDraft, setAnnDraft] = useState("");
+  const [adminSearch, setAdminSearch] = useState("");
+  const [adminSort, setAdminSort] = useState("updated"); // updated | msgs | created
   const fileRef = useRef(null);
   const endRef = useRef(null);
 
@@ -239,6 +247,10 @@ export default function JayAI() {
       if (u) {
         const docData = await getUserDoc(u.uid);
         setMeBlocked(!!docData?.blocked);
+        setMePremium(!!docData?.premium);
+        setMeLimit(docData?.adminLimit || 0);
+        dayRef.current = { date: docData?.dayDate || "", count: docData?.dayCount || 0 };
+        if (!docData?.created) setUserField(u.uid, { created: Date.now() });
         const cloud = await loadCloud(u.uid);
         if (cloud && cloud.list && cloud.list.length) {
           setConvs(cloud.list);
@@ -247,6 +259,18 @@ export default function JayAI() {
         if (u.displayName) setSettings(st => ({ ...st, name: st.name || u.displayName.split(" ")[0] }));
       }
     });
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const a = await getAnnouncement();
+      if (a && a.text) {
+        setAnn(a);
+        try {
+          if (localStorage.getItem("jay-ann-seen") === String(a.ts)) setAnnHide(true);
+        } catch (e) {}
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -397,6 +421,17 @@ export default function JayAI() {
       updateCur(c => ({ ...c, msgs: [...c.msgs, { role: "assistant", content: "⛔ Kechirasiz, hisobingiz administrator tomonidan bloklangan." }] }));
       setInput("");
       return;
+    }
+    if (user && !mePremium && meLimit > 0) {
+      const today = new Date().toDateString();
+      if (dayRef.current.date !== today) dayRef.current = { date: today, count: 0 };
+      if (dayRef.current.count >= meLimit) {
+        updateCur(c => ({ ...c, msgs: [...c.msgs, { role: "assistant", content: "⏳ Bugungi limitingiz tugadi (" + meLimit + " ta xabar). Ertaga davom etasiz!" }] }));
+        setInput("");
+        return;
+      }
+      dayRef.current.count++;
+      setUserField(user.uid, { dayCount: dayRef.current.count, dayDate: today });
     }
     const newMsgs = [...msgs, { role: "user", content: text || "Faylni ko'rib chiq", files }];
     updateCur(c => ({
@@ -655,7 +690,10 @@ export default function JayAI() {
                     fontSize: 13, fontWeight: 600, overflow: "hidden",
                     textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>{user.displayName || user.email}</div>
-                  <div onClick={logout} style={{ fontSize: 11, color: "#E5484D", cursor: "pointer" }}>{L.logout}</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {mePremium && <span style={{ fontSize: 11, color: "#F5C518" }}>💎 Premium</span>}
+                    <span onClick={logout} style={{ fontSize: 11, color: "#E5484D", cursor: "pointer" }}>{L.logout}</span>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -773,48 +811,194 @@ export default function JayAI() {
         )}
 
         {/* ==== ADMIN ko'rinishi ==== */}
-        {view === "admin" && (
-          <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+        {view === "admin" && (() => {
+          const today = new Date().toDateString();
+          const activeToday = adminUsers.filter(u => u.updated && new Date(u.updated).toDateString() === today).length;
+          const newToday = adminUsers.filter(u => u.created && new Date(u.created).toDateString() === today).length;
+
+          const q = adminSearch.trim().toLowerCase();
+          let list = adminUsers.filter(u =>
+            !q || (u.name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q)
+          );
+          list = [...list].sort((a, b) =>
+            adminSort === "msgs" ? b.msgs - a.msgs :
+            adminSort === "created" ? b.created - a.created :
+            b.updated - a.updated
+          );
+
+          // Grafik: oxirgi 14 kunda yangi foydalanuvchilar
+          const days = [];
+          for (let i = 13; i >= 0; i--) {
+            const d = new Date(); d.setDate(d.getDate() - i);
+            const key = d.toDateString();
+            days.push({
+              label: d.getDate(),
+              n: adminUsers.filter(u => u.created && new Date(u.created).toDateString() === key).length,
+            });
+          }
+          const maxN = Math.max(1, ...days.map(d => d.n));
+
+          // So'nggi xabarlar lentasi
+          const feed = [];
+          [...adminUsers].sort((a, b) => b.updated - a.updated).slice(0, 10).forEach(u => {
+            try {
+              const chats = JSON.parse(u.data).list || [];
+              const last = chats[0];
+              const lastMsg = (last?.msgs || []).filter(m => m.role === "user").slice(-1)[0];
+              if (lastMsg) feed.push({ name: u.name || u.email, text: lastMsg.content });
+            } catch (e) {}
+          });
+
+          return (
+          <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? 12 : 24 }}>
             <div style={{ maxWidth: 760, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
-              <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+
+              {/* Statistika kartalari */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
                 {[
                   ["Foydalanuvchilar", adminUsers.length],
-                  ["Jami chatlar", adminUsers.reduce((n, u) => n + u.chats, 0)],
+                  ["Bugun faol", activeToday],
+                  ["Bugun yangi", newToday],
                   ["Jami xabarlar", adminUsers.reduce((n, u) => n + u.msgs, 0)],
                 ].map(([t, v]) => (
                   <div key={t} style={{
-                    flex: 1, minWidth: 140, background: "#161618", border: "1px solid #26262B",
-                    borderRadius: 14, padding: 16,
+                    flex: 1, minWidth: 120, background: "#161618", border: "1px solid #26262B",
+                    borderRadius: 12, padding: 12,
                   }}>
-                    <div style={{ fontSize: 26, fontWeight: 700, color: "#E5484D" }}>{v}</div>
-                    <div style={{ fontSize: 12, color: "#9A9AA2" }}>{t}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#E5484D" }}>{v}</div>
+                    <div style={{ fontSize: 11, color: "#9A9AA2" }}>{t}</div>
                   </div>
                 ))}
               </div>
-              {adminUsers.map(u => (
+
+              {/* O'sish grafigi */}
+              <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: "#9A9AA2", marginBottom: 10 }}>📈 Yangi foydalanuvchilar (14 kun)</div>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 70 }}>
+                  {days.map((d, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                      <div title={d.n} style={{
+                        height: Math.max(3, (d.n / maxN) * 55), background: d.n ? "#C41E24" : "#26262B",
+                        borderRadius: 3,
+                      }} />
+                      <div style={{ fontSize: 8, color: "#7A7A82", marginTop: 3 }}>{d.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* E'lon yuborish */}
+              <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: "#9A9AA2", marginBottom: 8 }}>📢 Barcha foydalanuvchilarga e'lon</div>
+                <textarea value={annDraft} onChange={e => setAnnDraft(e.target.value)} rows={2}
+                  placeholder={ann?.text ? "Joriy e'lon: " + ann.text : "E'lon matni..."}
+                  style={{
+                    width: "100%", boxSizing: "border-box", background: "#0C0C0E", color: "#EDEDED",
+                    border: "1px solid #3A3A40", borderRadius: 10, padding: 10, fontSize: 13,
+                    fontFamily: "system-ui, sans-serif", resize: "vertical",
+                  }} />
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button onClick={async () => {
+                    if (!annDraft.trim()) return;
+                    await setAnnouncement(annDraft.trim());
+                    setAnn({ text: annDraft.trim(), ts: Date.now() });
+                    setAnnDraft("");
+                    setAnnHide(false);
+                  }} style={{
+                    background: "#C41E24", color: "#FFF", border: "none", borderRadius: 8,
+                    padding: "7px 16px", fontSize: 12.5, cursor: "pointer", fontWeight: 600,
+                  }}>Yuborish</button>
+                  {ann?.text && (
+                    <button onClick={async () => { await setAnnouncement(""); setAnn(null); }} style={{
+                      background: "transparent", color: "#9A9AA2", border: "1px solid #3A3A40",
+                      borderRadius: 8, padding: "7px 16px", fontSize: 12.5, cursor: "pointer",
+                    }}>E'lonni o'chirish</button>
+                  )}
+                </div>
+              </div>
+
+              {/* So'nggi xabarlar */}
+              {feed.length > 0 && (
+                <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, color: "#9A9AA2", marginBottom: 8 }}>💬 So'nggi xabarlar</div>
+                  {feed.map((f, i) => (
+                    <div key={i} style={{ fontSize: 12.5, marginBottom: 6, color: "#D9D9DE" }}>
+                      <b style={{ color: "#E5484D" }}>{f.name}:</b> {(f.text || "").slice(0, 120)}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Qidiruv va saralash */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)}
+                  placeholder="🔍 Ism yoki email bo'yicha qidirish..."
+                  style={{
+                    flex: 1, minWidth: 180, background: "#161618", color: "#EDEDED",
+                    border: "1px solid #3A3A40", borderRadius: 10, padding: "9px 12px",
+                    fontSize: 13, outline: "none", fontFamily: "system-ui, sans-serif",
+                  }} />
+                {[["updated", "Faollik"], ["msgs", "Xabarlar"], ["created", "Yangilar"]].map(([k, lbl]) => (
+                  <button key={k} onClick={() => setAdminSort(k)} style={{
+                    background: adminSort === k ? "#C41E24" : "#161618",
+                    border: "1px solid " + (adminSort === k ? "#C41E24" : "#3A3A40"),
+                    color: adminSort === k ? "#FFF" : "#D9D9DE",
+                    borderRadius: 10, padding: "0 14px", fontSize: 12.5, cursor: "pointer",
+                  }}>{lbl}</button>
+                ))}
+              </div>
+
+              {/* Foydalanuvchilar ro'yxati */}
+              {list.map(u => (
                 <div key={u.uid} style={{
                   background: "#161618", border: "1px solid " + (u.blocked ? "#C41E24" : "#26262B"),
                   borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontSize: 13,
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 140 }}>
                       <div style={{ fontWeight: 600 }}>
-                        {u.name || "Nomsiz"} {u.blocked && <span style={{ color: "#E5484D", fontSize: 11 }}>⛔ bloklangan</span>}
+                        {u.premium && "💎 "}{u.name || "Nomsiz"} {u.blocked && <span style={{ color: "#E5484D", fontSize: 11 }}>⛔</span>}
                       </div>
                       <div style={{ color: "#9A9AA2", fontSize: 12 }}>{u.email}</div>
                     </div>
-                    <div style={{ color: "#9A9AA2", fontSize: 12 }}>{u.chats} chat · {u.msgs} xabar</div>
+                    <div style={{ color: "#9A9AA2", fontSize: 11 }}>{u.chats}ch · {u.msgs}xb</div>
+                    <input type="number" min="0" defaultValue={u.adminLimit || ""}
+                      title="Kunlik limit (0 = cheksiz)" placeholder="∞"
+                      onBlur={async e => {
+                        const v = parseInt(e.target.value) || 0;
+                        if (v !== u.adminLimit) { await setUserField(u.uid, { adminLimit: v }); setAdminUsers(await listUsers()); }
+                      }}
+                      style={{
+                        width: 46, background: "#0C0C0E", color: "#EDEDED", textAlign: "center",
+                        border: "1px solid #3A3A40", borderRadius: 8, padding: "5px 4px", fontSize: 12,
+                      }} />
+                    <button onClick={async () => {
+                      await setUserField(u.uid, { premium: !u.premium });
+                      setAdminUsers(await listUsers());
+                    }} title="Premium berish/olish" style={{
+                      background: u.premium ? "#5C4A00" : "#222228", border: "1px solid #3A3A40",
+                      color: "#F5C518", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer",
+                    }}>💎</button>
                     <button onClick={() => setViewUser(viewUser?.uid === u.uid ? null : u)} style={{
                       background: "#222228", border: "1px solid #3A3A40", color: "#D9D9DE",
-                      borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer",
-                    }}>{viewUser?.uid === u.uid ? "Yopish" : "👁 Ko'rish"}</button>
+                      borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer",
+                    }}>👁</button>
                     <button onClick={async () => {
                       await setBlocked(u.uid, !u.blocked);
                       setAdminUsers(await listUsers());
                     }} style={{
                       background: u.blocked ? "#1E5C2E" : "#C41E24", border: "none", color: "#FFF",
-                      borderRadius: 8, padding: "5px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600,
-                    }}>{u.blocked ? "✓ Ochish" : "⛔ Bloklash"}</button>
+                      borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600,
+                    }}>{u.blocked ? "✓" : "⛔"}</button>
+                    <button onClick={async () => {
+                      if (window.confirm(u.email + " butunlay o'chirilsinmi? Qaytarib bo'lmaydi!")) {
+                        await deleteUser(u.uid);
+                        setAdminUsers(await listUsers());
+                      }
+                    }} title="O'chirish" style={{
+                      background: "transparent", border: "1px solid #C41E24", color: "#E5484D",
+                      borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer",
+                    }}>🗑</button>
                   </div>
 
                   {viewUser?.uid === u.uid && (() => {
@@ -845,20 +1029,35 @@ export default function JayAI() {
                   })()}
                 </div>
               ))}
-              {adminUsers.length === 0 && (
-                <div style={{ color: "#8F8F8F", textAlign: "center", marginTop: 40 }}>
-                  Hali foydalanuvchilar yo'q
+              {list.length === 0 && (
+                <div style={{ color: "#8F8F8F", textAlign: "center", marginTop: 30 }}>
+                  Hech narsa topilmadi
                 </div>
               )}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ==== CHAT ko'rinishi ==== */}
         {view === "chat" && (
           <>
             <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px 10px" : "24px 16px" }}>
               <div style={{ maxWidth: 760, margin: "0 auto" }}>
+                {ann && ann.text && !annHide && (
+                  <div style={{
+                    background: "#2A1215", border: "1px solid #C41E24", borderRadius: 12,
+                    padding: "10px 14px", marginBottom: 16, fontSize: 13.5,
+                    fontFamily: "system-ui, sans-serif", display: "flex", gap: 10, alignItems: "center",
+                  }}>
+                    <span>📢</span>
+                    <span style={{ flex: 1, whiteSpace: "pre-wrap" }}>{ann.text}</span>
+                    <span onClick={() => {
+                      setAnnHide(true);
+                      try { localStorage.setItem("jay-ann-seen", String(ann.ts)); } catch (e) {}
+                    }} style={{ cursor: "pointer", color: "#E5484D", fontWeight: 700 }}>×</span>
+                  </div>
+                )}
                 {msgs.length === 0 && (
                   <div style={{ textAlign: "center", marginTop: 70 }}>
                     <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
