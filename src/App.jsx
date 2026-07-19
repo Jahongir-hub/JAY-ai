@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { loginGoogle, logout, watchUser, saveCloud, loadCloud, listUsers, getUserDoc, setBlocked, setUserField, deleteUser, getAnnouncement, setAnnouncement } from "./firebase.js";
+import { loginGoogle, logout, watchUser, saveCloud, loadCloud, listUsers, getUserDoc, setBlocked, setUserField, deleteUser, getAnnouncement, setAnnouncement, getSupport, sendSupport, listSupport, markSupportRead } from "./firebase.js";
 
 // O'ZINGIZNING Google emailingizni yozing — admin panel faqat sizga ko'rinadi:
 const ADMIN_EMAIL = "j96433204@gmail.com";
@@ -197,6 +197,32 @@ const LANGS = {
   },
 };
 
+function AdminReply({ uid, onSent }) {
+  const [txt, setTxt] = useState("");
+  const send = async () => {
+    if (!txt.trim()) return;
+    await sendSupport(uid, { from: "admin", text: txt.trim(), ts: Date.now() });
+    setTxt("");
+    onSent && onSent();
+  };
+  return (
+    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+      <input value={txt} onChange={e => setTxt(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") send(); }}
+        placeholder="Javob yozing..."
+        style={{
+          flex: 1, background: "#0C0C0E", color: "#EDEDED",
+          border: "1px solid #3A3A40", borderRadius: 8, padding: "7px 10px",
+          fontSize: 12.5, outline: "none", fontFamily: "system-ui, sans-serif",
+        }} />
+      <button onClick={send} style={{
+        background: "#C41E24", color: "#FFF", border: "none", borderRadius: 8,
+        padding: "0 14px", fontSize: 12, cursor: "pointer", fontWeight: 600,
+      }}>➤</button>
+    </div>
+  );
+}
+
 const newConv = (mode = "chat") => ({
   id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
   title: mode === "chat" ? "Yangi chat" : MODES[mode].label + " chat",
@@ -234,6 +260,11 @@ export default function JayAI() {
   const [annDraft, setAnnDraft] = useState("");
   const [adminSearch, setAdminSearch] = useState("");
   const [adminSort, setAdminSort] = useState("updated"); // updated | msgs | created
+  const [supMsgs, setSupMsgs] = useState([]);      // mening yordam suhbatim
+  const [supInput, setSupInput] = useState("");
+  const [supUnread, setSupUnread] = useState(false);
+  const [adminSup, setAdminSup] = useState([]);    // admin: barcha murojaatlar
+  const [supOpen, setSupOpen] = useState(null);    // admin ochgan murojaat uid
   const fileRef = useRef(null);
   const endRef = useRef(null);
 
@@ -251,6 +282,9 @@ export default function JayAI() {
         setMeLimit(docData?.adminLimit || 0);
         dayRef.current = { date: docData?.dayDate || "", count: docData?.dayCount || 0 };
         if (!docData?.created) setUserField(u.uid, { created: Date.now() });
+        const sup = await getSupport(u.uid);
+        setSupMsgs(sup?.msgs || []);
+        setSupUnread(!!sup?.unreadUser);
         const cloud = await loadCloud(u.uid);
         if (cloud && cloud.list && cloud.list.length) {
           setConvs(cloud.list);
@@ -363,6 +397,15 @@ export default function JayAI() {
     recRef.current = rec;
     rec.start();
     setListening(true);
+  };
+
+  const sendSup = async () => {
+    const text = supInput.trim();
+    if (!text || !user) return;
+    const msg = { from: "user", text, ts: Date.now() };
+    setSupMsgs(m => [...m, msg]);
+    setSupInput("");
+    await sendSupport(user.uid, msg, { name: user.displayName, email: user.email });
   };
 
   const shareChat = () => {
@@ -641,8 +684,22 @@ export default function JayAI() {
           <button onClick={() => setView("customize")} style={{ ...S.sideBtn, background: view === "customize" ? "#222228" : "transparent" }}>
             {L.settings}
           </button>
+          <button onClick={async () => {
+            setView("support");
+            if (isMobile) setSideOpen(false);
+            if (user) {
+              const sup = await getSupport(user.uid);
+              setSupMsgs(sup?.msgs || []);
+              setSupUnread(false);
+              markSupportRead(user.uid, "user");
+            }
+          }} style={{ ...S.sideBtn, background: view === "support" ? "#222228" : "transparent" }}>
+            🆘 Yordam {supUnread && <span style={{
+              width: 8, height: 8, borderRadius: "50%", background: "#E5484D", marginLeft: "auto",
+            }} />}
+          </button>
           {user && user.email === ADMIN_EMAIL && (
-            <button onClick={async () => { setView("admin"); setAdminUsers(await listUsers()); }}
+            <button onClick={async () => { setView("admin"); setAdminUsers(await listUsers()); setAdminSup(await listSupport()); }}
               style={{ ...S.sideBtn, background: view === "admin" ? "#222228" : "transparent" }}>
               {L.admin}
             </button>
@@ -722,7 +779,7 @@ export default function JayAI() {
             borderRadius: 8, padding: "5px 11px", fontSize: 15, cursor: "pointer",
           }}>☰</button>
           <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
-            {view === "artifacts" ? "Artifacts" : view === "customize" ? L.settingsTitle : view === "admin" ? L.adminPanel : (cur?.title || "JAY AI")}
+            {view === "artifacts" ? "Artifacts" : view === "customize" ? L.settingsTitle : view === "admin" ? L.adminPanel : view === "support" ? "🆘 Yordam" : (cur?.title || "JAY AI")}
           </span>
           {view === "chat" && msgs.length > 0 && (
             <button onClick={shareChat} title="Suhbatni ulashish" style={{
@@ -807,6 +864,71 @@ export default function JayAI() {
                 {L.saveNote}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ==== YORDAM ko'rinishi ==== */}
+        {view === "support" && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? 12 : 24 }}>
+              <div style={{ maxWidth: 640, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
+                {!user ? (
+                  <div style={{ textAlign: "center", marginTop: 60, color: "#9A9AA2" }}>
+                    Yordam bo'limidan foydalanish uchun avval Google bilan kiring.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{
+                      background: "#161618", border: "1px solid #26262B", borderRadius: 12,
+                      padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#9A9AA2",
+                    }}>
+                      Savol yoki muammoingizni yozing — administrator tez orada javob beradi.
+                    </div>
+                    {supMsgs.map((m, i) => (
+                      <div key={i} style={{
+                        display: "flex", justifyContent: m.from === "user" ? "flex-end" : "flex-start",
+                        marginBottom: 10,
+                      }}>
+                        <div style={{
+                          maxWidth: "80%", padding: "10px 14px", fontSize: 14, lineHeight: 1.5,
+                          whiteSpace: "pre-wrap", wordBreak: "break-word",
+                          borderRadius: m.from === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                          background: m.from === "user" ? "#C41E24" : "#161618",
+                          border: m.from === "user" ? "none" : "1px solid #26262B",
+                          color: "#EDEDED",
+                        }}>
+                          {m.from === "admin" && <div style={{ fontSize: 10, color: "#E5484D", fontWeight: 700, marginBottom: 3 }}>👑 ADMIN</div>}
+                          {m.text}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+            {user && (
+              <div style={{ padding: "10px 14px 16px" }}>
+                <div style={{
+                  maxWidth: 640, margin: "0 auto", display: "flex", gap: 8,
+                  background: "#161618", border: "1px solid #26262B", borderRadius: 14, padding: 6,
+                }}>
+                  <textarea value={supInput} onChange={e => setSupInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSup(); } }}
+                    placeholder="Xabar yozing..." rows={1}
+                    style={{
+                      flex: 1, resize: "none", background: "transparent", color: "#EDEDED",
+                      border: "none", padding: "9px 10px", fontSize: 14, outline: "none",
+                      fontFamily: "system-ui, sans-serif",
+                    }} />
+                  <button onClick={sendSup} disabled={!supInput.trim()} style={{
+                    background: supInput.trim() ? "#C41E24" : "#1E1E20",
+                    color: supInput.trim() ? "#FFF" : "#5A5A5A",
+                    border: "none", borderRadius: 10, padding: "0 16px", fontWeight: 600,
+                    fontSize: 13, cursor: "pointer", fontFamily: "system-ui, sans-serif",
+                  }}>➤</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -915,6 +1037,65 @@ export default function JayAI() {
                     }}>E'lonni o'chirish</button>
                   )}
                 </div>
+              </div>
+
+              {/* Support murojaatlari */}
+              <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: "#9A9AA2", flex: 1 }}>
+                    🆘 Yordam murojaatlari
+                    {adminSup.filter(t => t.unreadAdmin).length > 0 && (
+                      <span style={{
+                        background: "#C41E24", color: "#FFF", borderRadius: 10,
+                        fontSize: 10, padding: "1px 7px", marginLeft: 6,
+                      }}>{adminSup.filter(t => t.unreadAdmin).length} yangi</span>
+                    )}
+                  </div>
+                  <button onClick={async () => setAdminSup(await listSupport())} style={{
+                    background: "#222228", border: "1px solid #3A3A40", color: "#D9D9DE",
+                    borderRadius: 8, padding: "4px 12px", fontSize: 11.5, cursor: "pointer",
+                  }}>🔄 Yangilash</button>
+                </div>
+                {adminSup.length === 0 && <div style={{ fontSize: 12, color: "#8F8F8F" }}>Murojaatlar yo'q — "Yangilash"ni bosing</div>}
+                {adminSup.map(t => (
+                  <div key={t.uid} style={{
+                    border: "1px solid " + (t.unreadAdmin ? "#C41E24" : "#26262B"),
+                    borderRadius: 10, padding: "8px 12px", marginBottom: 6,
+                  }}>
+                    <div onClick={async () => {
+                      const open = supOpen === t.uid ? null : t.uid;
+                      setSupOpen(open);
+                      if (open && t.unreadAdmin) {
+                        await markSupportRead(t.uid, "admin");
+                        setAdminSup(await listSupport());
+                      }
+                    }} style={{ cursor: "pointer", display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <b style={{ fontSize: 13 }}>{t.unreadAdmin && "🔴 "}{t.name || t.email}</b>
+                        <div style={{ fontSize: 11.5, color: "#9A9AA2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {(t.msgs || []).slice(-1)[0]?.text || ""}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 10, color: "#7A7A82" }}>
+                        {t.updated ? new Date(t.updated).toLocaleString().slice(0, 17) : ""}
+                      </span>
+                    </div>
+                    {supOpen === t.uid && (
+                      <div style={{ marginTop: 8, borderTop: "1px solid #26262B", paddingTop: 8 }}>
+                        {(t.msgs || []).map((m, mi) => (
+                          <div key={mi} style={{
+                            fontSize: 12.5, marginBottom: 5,
+                            color: m.from === "user" ? "#FFF" : "#E5484D",
+                            whiteSpace: "pre-wrap",
+                          }}>
+                            <b>{m.from === "user" ? "👤" : "👑"}</b> {m.text}
+                          </div>
+                        ))}
+                        <AdminReply uid={t.uid} onSent={async () => setAdminSup(await listSupport())} />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {/* So'nggi xabarlar */}
