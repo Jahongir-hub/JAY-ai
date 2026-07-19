@@ -83,6 +83,46 @@ export async function setAnnouncement(text) {
   try { await setDoc(doc(db, "meta", "announcement"), { text, ts: Date.now() }); } catch (e) {}
 }
 
+// ===== Yordam (Support) =====
+export async function getSupport(uid) {
+  try {
+    const snap = await getDoc(doc(db, "support", uid));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { return null; }
+}
+
+export async function sendSupport(uid, msg, meta = {}) {
+  try {
+    const cur = await getSupport(uid);
+    const msgs = (cur?.msgs || []).slice(-50);
+    msgs.push(msg);
+    await setDoc(doc(db, "support", uid), {
+      msgs,
+      name: meta.name || cur?.name || "",
+      email: meta.email || cur?.email || "",
+      updated: Date.now(),
+      unreadAdmin: msg.from === "user",
+      unreadUser: msg.from === "admin",
+    });
+  } catch (e) {}
+}
+
+export async function listSupport() {
+  try {
+    const snap = await getDocs(collection(db, "support"));
+    return snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+      .sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  } catch (e) { return []; }
+}
+
+export async function markSupportRead(uid, who) {
+  try {
+    await setDoc(doc(db, "support", uid),
+      who === "admin" ? { unreadAdmin: false } : { unreadUser: false },
+      { merge: true });
+  } catch (e) {}
+}
+
 // Admin: barcha foydalanuvchilar ro'yxati
 export async function listUsers() {
   try {
