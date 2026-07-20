@@ -1,5 +1,5 @@
-// JAY AI Telegram bot — webhook. Kalitlar: TELEGRAM_BOT_TOKEN, GEMINI_API_KEY
-const SYSTEM = `Sen JAY AI'san — aqlli, do'stona yordamchi (Telegram bot versiyasi). Seni ISHIMOV JAHONGIR yaratgan (JAY = "Jahongir AI Yasadi"). "Seni kim yaratgan?" deb so'rashsa, "Meni ISHIMOV JAHONGIR yaratgan" deb javob ber. Foydalanuvchi qaysi tilda yozsa, o'sha tilda javob ber (asosan o'zbek tilida). Qisqa, aniq va foydali javob ber. Telegram uchun formatlash: oddiy matn yoz, murakkab markdown ishlatma. Sayt versiyasi: jayai.vercel.app`;
+// JAY AI Telegram bot. Kalitlar: TELEGRAM_BOT_TOKEN, GEMINI_API_KEY, ADMIN_CHAT_ID
+const SYSTEM = `Sen JAY AI'san — aqlli, do'stona yordamchi (Telegram bot versiyasi). Seni ISHIMOV JAHONGIR yaratgan (JAY = "Jahongir AI Yasadi"). "Seni kim yaratgan?" deb so'rashsa, "Meni ISHIMOV JAHONGIR yaratgan" deb javob ber. Foydalanuvchi qaysi tilda yozsa, o'sha tilda javob ber (asosan o'zbek tilida). Qisqa, aniq va foydali javob ber. Oddiy matn yoz, murakkab markdown ishlatma. Sayt: jayai.vercel.app`;
 
 const MODELS = [
   "gemini-3.1-flash-lite",
@@ -8,6 +8,16 @@ const MODELS = [
   "gemma-4-26b-a4b-it",
   "gemma-4-31b-it",
 ];
+
+const KEYBOARD = {
+  keyboard: [
+    [{ text: "🆘 Adminga murojaat" }],
+    [{ text: "🌐 Sayt" }, { text: "ℹ️ JAY haqida" }],
+  ],
+  resize_keyboard: true,
+};
+
+const SUP_MARK = "✍️ Murojaatingizni SHU XABARGA JAVOB (reply) qilib yozing — admin tez orada javob beradi.";
 
 async function askGemini(userText) {
   for (const model of MODELS) {
@@ -39,12 +49,13 @@ async function askGemini(userText) {
 
 async function tg(method, body) {
   try {
-    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-  } catch (e) {}
+    return await r.json();
+  } catch (e) { return null; }
 }
 
 export default async function handler(req, res) {
@@ -54,31 +65,104 @@ export default async function handler(req, res) {
     if (!msg || !msg.chat) return res.status(200).json({ ok: true });
     const chatId = msg.chat.id;
     const text = (msg.text || "").trim();
+    const ADMIN = process.env.ADMIN_CHAT_ID;
+    const isAdmin = ADMIN && String(chatId) === String(ADMIN);
+
+    // ===== ADMIN: murojaatga javob (reply orqali) =====
+    if (isAdmin && msg.reply_to_message) {
+      const orig = msg.reply_to_message.text || "";
+      const m = orig.match(/#u(-?\d+)/);
+      if (m) {
+        await tg("sendMessage", {
+          chat_id: m[1],
+          text: "👑 Admin javobi:\n\n" + text,
+        });
+        await tg("sendMessage", { chat_id: chatId, text: "✅ Javob yuborildi" });
+        return res.status(200).json({ ok: true });
+      }
+    }
+
+    // ===== FOYDALANUVCHI: support xabari (reply orqali) =====
+    if (msg.reply_to_message && (msg.reply_to_message.text || "").startsWith("✍️")) {
+      if (ADMIN) {
+        const who = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(" ")
+          + (msg.from?.username ? " (@" + msg.from.username + ")" : "");
+        await tg("sendMessage", {
+          chat_id: ADMIN,
+          text: "🆘 YANGI MUROJAAT\n👤 " + who + "\n#u" + chatId + "\n\n" + text +
+            "\n\n↩️ Javob berish uchun shu xabarga REPLY qiling",
+        });
+        await tg("sendMessage", {
+          chat_id: chatId,
+          text: "✅ Murojaatingiz adminga yuborildi! Javob shu yerga keladi.",
+          reply_markup: KEYBOARD,
+        });
+      } else {
+        await tg("sendMessage", { chat_id: chatId, text: "Hozircha admin ulanmagan, keyinroq urinib ko'ring." });
+      }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ===== Tugmalar va buyruqlar =====
+    if (text === "/start") {
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: "Salom! Men JAY AI 🤖\n\nJahongir AI Yasadi — bepul o'zbek AI yordamchisi.\n\nIstalgan savolni yozing: kod, tarjima, maslahat — hammasida yordam beraman!\n\n🌐 To'liq versiya (rasm, fayl, rejimlar): jayai.vercel.app",
+        reply_markup: KEYBOARD,
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (text === "/id") {
+      await tg("sendMessage", { chat_id: chatId, text: "Sizning chat ID: " + chatId });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (text === "🆘 Adminga murojaat") {
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: SUP_MARK,
+        reply_markup: { force_reply: true },
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (text === "🌐 Sayt") {
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: "🌐 JAY AI to'liq versiyasi:\njayai.vercel.app\n\nU yerda: rasm yaratish, fayl yuklash, rejimlar, suhbatlar tarixi va boshqalar!",
+        reply_markup: KEYBOARD,
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (text === "ℹ️ JAY haqida") {
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: "🤖 JAY AI — Jahongir AI Yasadi\n\nBepul o'zbek AI yordamchisi. Yaratuvchi: ISHIMOV JAHONGIR.\n\n💬 Savol-javob, kod, tarjima, maslahat\n🖼 Rasm yaratish (saytda)\n🌐 jayai.vercel.app",
+        reply_markup: KEYBOARD,
+      });
+      return res.status(200).json({ ok: true });
+    }
 
     if (!text) {
       await tg("sendMessage", {
         chat_id: chatId,
-        text: "Hozircha faqat matnli xabarlarni tushunaman 🙂 Rasm va fayllar bilan ishlash uchun saytga kiring: jayai.vercel.app",
+        text: "Hozircha faqat matnli xabarlarni tushunaman 🙂 Rasm va fayllar uchun: jayai.vercel.app",
+        reply_markup: KEYBOARD,
       });
       return res.status(200).json({ ok: true });
     }
 
-    if (text === "/start") {
+    // ===== Oddiy AI suhbat =====
+    await tg("sendChatAction", { chat_id: chatId, action: "typing" });
+    const reply = await askGemini(text);
+    for (let i = 0; i < reply.length; i += 4000) {
       await tg("sendMessage", {
         chat_id: chatId,
-        text: "Salom! Men JAY AI 🤖\n\nJahongir AI Yasadi — bepul o'zbek AI yordamchisi.\n\nIstalgan savolni yozing: kod, tarjima, maslahat, insho — hammasida yordam beraman!\n\n🌐 To'liq versiya (rasm, fayl, rejimlar): jayai.vercel.app",
+        text: reply.slice(i, i + 4000),
+        reply_markup: KEYBOARD,
       });
-      return res.status(200).json({ ok: true });
-    }
-
-    // "Yozmoqda..." holati
-    await tg("sendChatAction", { chat_id: chatId, action: "typing" });
-
-    const reply = await askGemini(text);
-
-    // Telegram limiti 4096 belgi — bo'lib yuborish
-    for (let i = 0; i < reply.length; i += 4000) {
-      await tg("sendMessage", { chat_id: chatId, text: reply.slice(i, i + 4000) });
     }
 
     return res.status(200).json({ ok: true });
