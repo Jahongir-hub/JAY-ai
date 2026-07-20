@@ -111,6 +111,60 @@ function SvgImage({ value }) {
   );
 }
 
+// Oddiy markdown: **qalin**, *kursiv*, `kod`, sarlavha, ro'yxatlar
+function fmtInline(str, key) {
+  const out = [];
+  const re = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+  let last = 0, m, i = 0;
+  while ((m = re.exec(str)) !== null) {
+    if (m.index > last) out.push(str.slice(last, m.index));
+    const t = m[0];
+    if (t.startsWith("**")) out.push(<b key={key + "-b" + i}>{t.slice(2, -2)}</b>);
+    else if (t.startsWith("`")) out.push(
+      <code key={key + "-c" + i} style={{
+        background: "#26262B", borderRadius: 5, padding: "1px 6px",
+        fontFamily: "Consolas, Menlo, monospace", fontSize: "0.9em", color: "#F0A0A3",
+      }}>{t.slice(1, -1)}</code>
+    );
+    else out.push(<i key={key + "-i" + i}>{t.slice(1, -1)}</i>);
+    last = re.lastIndex; i++;
+  }
+  if (last < str.length) out.push(str.slice(last));
+  return out;
+}
+
+function Md({ text }) {
+  const lines = text.split("\n");
+  return (
+    <span>
+      {lines.map((ln, i) => {
+        const h = ln.match(/^(#{1,4})\s+(.*)/);
+        if (h) return (
+          <div key={i} style={{ fontWeight: 700, fontSize: h[1].length <= 2 ? "1.15em" : "1.05em", margin: "10px 0 4px" }}>
+            {fmtInline(h[2], i)}
+          </div>
+        );
+        const li = ln.match(/^\s*[-*•]\s+(.*)/);
+        if (li) return (
+          <div key={i} style={{ paddingLeft: 16, position: "relative", margin: "2px 0" }}>
+            <span style={{ position: "absolute", left: 2, color: "#E5484D" }}>•</span>
+            {fmtInline(li[1], i)}
+          </div>
+        );
+        const num = ln.match(/^\s*(\d+)[.)]\s+(.*)/);
+        if (num) return (
+          <div key={i} style={{ paddingLeft: 20, position: "relative", margin: "2px 0" }}>
+            <span style={{ position: "absolute", left: 0, color: "#E5484D", fontWeight: 600 }}>{num[1]}.</span>
+            {fmtInline(num[2], i)}
+          </div>
+        );
+        if (ln.trim() === "") return <div key={i} style={{ height: 8 }} />;
+        return <div key={i}>{fmtInline(ln, i)}</div>;
+      })}
+    </span>
+  );
+}
+
 function CodeBlock({ lang, value, onPreview }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -1324,7 +1378,7 @@ export default function JayAI() {
                               ? (isSvg(p.value)
                                   ? <SvgImage key={j} value={p.value} />
                                   : <CodeBlock key={j} lang={p.lang} value={p.value} onPreview={setPreview} />)
-                              : <span key={j} style={{ whiteSpace: "pre-wrap" }}>{p.value}</span>
+                              : <Md key={j} text={p.value} />
                           )}
                           <button onClick={() => speak(m.content)} title="Ovozda eshitish" style={{
                             background: "transparent", border: "none", color: "#7A7A82",
