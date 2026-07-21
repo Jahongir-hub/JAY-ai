@@ -46,6 +46,7 @@ export default async function handler(req, res) {
             system_instruction: { parts: [{ text: system || "" }] },
             contents,
             generationConfig: { maxOutputTokens: Math.min(max_tokens || 4000, 8000) },
+            ...(model.startsWith("gemini") ? { tools: [{ google_search: {} }] } : {}),
           }),
         }
       );
