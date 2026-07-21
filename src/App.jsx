@@ -287,7 +287,7 @@ export default function JayAI() {
   const [convs, setConvs] = useState([newConv()]);
   const [curId, setCurId] = useState(null);
   const [view, setView] = useState("chat"); // chat | artifacts | customize
-  const [settings, setSettings] = useState({ name: "Jahongir", extra: "" });
+  const [settings, setSettings] = useState({ name: "", extra: "", lang: "uz" });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -752,6 +752,9 @@ export default function JayAI() {
               width: 8, height: 8, borderRadius: "50%", background: "#E5484D", marginLeft: "auto",
             }} />}
           </button>
+          <a href="https://t.me/jayai_uz_bot" target="_blank" rel="noopener" style={{
+            ...S.sideBtn, textDecoration: "none",
+          }}>✈️ Telegram bot</a>
           {user && user.email === ADMIN_EMAIL && (
             <button onClick={async () => { setView("admin"); setAdminUsers(await listUsers()); setAdminSup(await listSupport()); }}
               style={{ ...S.sideBtn, background: view === "admin" ? "#222228" : "transparent" }}>
