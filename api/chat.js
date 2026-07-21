@@ -43,10 +43,9 @@ export default async function handler(req, res) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: system || "" }] },
+            system_instruction: { parts: [{ text: (system || "") + "\n\nMUHIM: Javobingda o'ylash jarayonini, tahlilni yoki qadamlarni YOZMA. Faqat toza, tayyor javobni ber." }] },
             contents,
-            generationConfig: { maxOutputTokens: Math.min(max_tokens || 4000, 8000), thinkingConfig: { thinkingBudget: 0 } },
-            ...(model.startsWith("gemini") ? { tools: [{ google_search: {} }] } : {}),
+            generationConfig: { maxOutputTokens: Math.min(max_tokens || 4000, 8000) },
           }),
         }
       );
