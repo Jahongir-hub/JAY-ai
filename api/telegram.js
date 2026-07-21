@@ -47,6 +47,39 @@ async function askGemini(userText) {
   return "Kechirasiz, hozir javob bera olmayapman. Birozdan keyin qayta urinib ko'ring 🙏";
 }
 
+// Firestore REST (kalitsiz — public rules bilan) — tg_users kolleksiyasi
+const FS_BASE = "https://firestore.googleapis.com/v1/projects/jay---ai/databases/(default)/documents";
+
+async function getTgUser(chatId) {
+  try {
+    const r = await fetch(FS_BASE + "/tg_users/" + chatId);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const f = d.fields || {};
+    return {
+      name: f.name?.stringValue || "",
+      phone: f.phone?.stringValue || "",
+      step: f.step?.stringValue || "",
+    };
+  } catch (e) { return null; }
+}
+
+async function saveTgUser(chatId, fields) {
+  try {
+    const cur = await getTgUser(chatId) || {};
+    const merged = { ...cur, ...fields };
+    await fetch(FS_BASE + "/tg_users/" + chatId + "?updateMask.fieldPaths=name&updateMask.fieldPaths=phone&updateMask.fieldPaths=step", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: {
+        name: { stringValue: merged.name || "" },
+        phone: { stringValue: merged.phone || "" },
+        step: { stringValue: merged.step || "" },
+      } }),
+    });
+  } catch (e) {}
+}
+
 async function tg(method, body) {
   try {
     const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
@@ -105,11 +138,21 @@ export default async function handler(req, res) {
 
     // ===== Tugmalar va buyruqlar =====
     if (text === "/start") {
-      await tg("sendMessage", {
-        chat_id: chatId,
-        text: "Salom! Men JAY AI 🤖\n\nJahongir AI Yasadi — bepul o'zbek AI yordamchisi.\n\nIstalgan savolni yozing: kod, tarjima, maslahat — hammasida yordam beraman!\n\n🌐 To'liq versiya (rasm, fayl, rejimlar): jayai.vercel.app",
-        reply_markup: KEYBOARD,
-      });
+      const u = await getTgUser(chatId);
+      if (u && u.name && u.phone) {
+        await tg("sendMessage", {
+          chat_id: chatId,
+          text: "Salom, " + u.name + "! 👋\n\nMen JAY AI 🤖 — savolingizni yozing.",
+          reply_markup: KEYBOARD,
+        });
+      } else {
+        await saveTgUser(chatId, { step: "name" });
+        await tg("sendMessage", {
+          chat_id: chatId,
+          text: "Salom! Men JAY AI 🤖\nJahongir AI Yasadi — bepul o'zbek AI yordamchisi.\n\nBoshlashdan oldin tanishib olaylik.\n\n👤 Ismingizni yozing:",
+          reply_markup: { remove_keyboard: true },
+        });
+      }
       return res.status(200).json({ ok: true });
     }
 
@@ -143,6 +186,45 @@ export default async function handler(req, res) {
         reply_markup: KEYBOARD,
       });
       return res.status(200).json({ ok: true });
+    }
+
+    // ===== Telefon kontakt qabul qilish =====
+    if (msg.contact && msg.contact.phone_number) {
+      await saveTgUser(chatId, { phone: msg.contact.phone_number, step: "done" });
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: "✅ Rahmat! Ro'yxatdan o'tdingiz. Endi istalgan savolni yozing 🤖",
+        reply_markup: KEYBOARD,
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ===== Registratsiya bosqichlari =====
+    {
+      const u = await getTgUser(chatId);
+      if (u && u.step === "name" && text) {
+        await saveTgUser(chatId, { name: text.slice(0, 40), step: "phone" });
+        await tg("sendMessage", {
+          chat_id: chatId,
+          text: "Tanishganimdan xursandman, " + text.slice(0, 40) + "! 📱\n\nEndi telefon raqamingizni ulashing (raqamingiz faqat ro'yxatdan o'tish uchun saqlanadi):",
+          reply_markup: {
+            keyboard: [[{ text: "📱 Raqamni ulashish", request_contact: true }]],
+            resize_keyboard: true, one_time_keyboard: true,
+          },
+        });
+        return res.status(200).json({ ok: true });
+      }
+      if (u && u.step === "phone") {
+        await tg("sendMessage", {
+          chat_id: chatId,
+          text: "Iltimos, pastdagi 📱 tugma orqali raqamingizni ulashing.",
+          reply_markup: {
+            keyboard: [[{ text: "📱 Raqamni ulashish", request_contact: true }]],
+            resize_keyboard: true, one_time_keyboard: true,
+          },
+        });
+        return res.status(200).json({ ok: true });
+      }
     }
 
     if (!text) {
