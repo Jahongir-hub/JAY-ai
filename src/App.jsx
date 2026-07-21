@@ -313,7 +313,9 @@ export default function JayAI() {
   const [annHide, setAnnHide] = useState(false);
   const [annDraft, setAnnDraft] = useState("");
   const [adminSearch, setAdminSearch] = useState("");
-  const [adminSort, setAdminSort] = useState("updated"); // updated | msgs | created
+  const [adminSort, setAdminSort] = useState("updated");
+  const [autoVoice, setAutoVoice] = useState(false);
+  const [regen, setRegen] = useState(0);
   const [supMsgs, setSupMsgs] = useState([]);      // mening yordam suhbatim
   const [supInput, setSupInput] = useState("");
   const [supUnread, setSupUnread] = useState(false);
@@ -462,6 +464,40 @@ export default function JayAI() {
     await sendSupport(user.uid, msg, { name: user.displayName, email: user.email });
   };
 
+  const regenerate = async () => {
+    if (loading || !cur || cur.msgs.length < 2) return;
+    // Oxirgi assistant javobini olib tashlab, oxirgi user xabarini qayta yuboramiz
+    const msgs = [...cur.msgs];
+    while (msgs.length && msgs[msgs.length - 1].role === "assistant") msgs.pop();
+    if (!msgs.length) return;
+    updateCur(c => ({ ...c, msgs }));
+    setLoading(true);
+    const system = BASE_SYSTEM + "\n\n" + L.sysLang
+      + (power === "low" ? "\n\nJUDA QISQA javob ber — 1-3 jumla, faqat eng muhimi." : "")
+      + (settings.name ? "\n\nFoydalanuvchining ismi: " + settings.name + "." : "");
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ max_tokens: 4000, system, messages: msgs.map(m => ({ role: m.role, content: m.content })) }),
+      });
+      const data = await res.json();
+      const reply = (data.content || []).map(c => c.type === "text" ? c.text : "").filter(Boolean).join("\n") || "Javob kelmadi.";
+      updateCur(c => ({ ...c, msgs: [...msgs, { role: "assistant", content: reply }] }));
+      if (autoVoice) speak(reply);
+    } catch (e) {
+      updateCur(c => ({ ...c, msgs: [...msgs, { role: "assistant", content: "Xatolik." }] }));
+    }
+    setLoading(false);
+  };
+
+  const copyText = (t) => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); document.body.removeChild(ta);
+    } catch (e) {}
+  };
+
   const shareChat = () => {
     if (!cur || cur.msgs.length === 0) return;
     const text = "JAY AI suhbati — " + cur.title + "\n\n" +
@@ -572,6 +608,7 @@ export default function JayAI() {
         .filter(Boolean)
         .join("\n") || "Kechirasiz, javob kelmadi. Qayta urinib ko'ring.";
       updateCur(c => ({ ...c, msgs: [...c.msgs, { role: "assistant", content: reply }] }));
+      if (autoVoice) speak(reply);
     } catch (e) {
       updateCur(c => ({ ...c, msgs: [...c.msgs, { role: "assistant", content: "Xatolik yuz berdi. Qayta urinib ko'ring." }] }));
     }
@@ -755,6 +792,10 @@ export default function JayAI() {
           <a href="https://t.me/jayai_uz_bot" target="_blank" rel="noopener" style={{
             ...S.sideBtn, textDecoration: "none",
           }}>✈️ Telegram bot</a>
+          <button onClick={() => { setView("premium"); if (isMobile) setSideOpen(false); }}
+            style={{ ...S.sideBtn, background: view === "premium" ? "#222228" : "transparent" }}>
+            💎 Premium
+          </button>
           {user && user.email === ADMIN_EMAIL && (
             <button onClick={async () => { setView("admin"); setAdminUsers(await listUsers()); setAdminSup(await listSupport()); }}
               style={{ ...S.sideBtn, background: view === "admin" ? "#222228" : "transparent" }}>
@@ -836,7 +877,7 @@ export default function JayAI() {
             borderRadius: 8, padding: "5px 11px", fontSize: 15, cursor: "pointer",
           }}>☰</button>
           <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
-            {view === "artifacts" ? "Artifacts" : view === "customize" ? L.settingsTitle : view === "admin" ? L.adminPanel : view === "support" ? "🆘 Yordam" : (cur?.title || "JAY AI")}
+            {view === "artifacts" ? "Artifacts" : view === "customize" ? L.settingsTitle : view === "admin" ? L.adminPanel : view === "support" ? "🆘 Yordam" : view === "premium" ? "💎 Premium" : (cur?.title || "JAY AI")}
           </span>
           {view === "chat" && msgs.length > 0 && (
             <button onClick={shareChat} title="Suhbatni ulashish" style={{
@@ -904,6 +945,60 @@ export default function JayAI() {
                   }}>{label}</button>
                 ))}
               </div>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                background: "#161618", border: "1px solid #26262B", borderRadius: 12,
+                padding: "12px 14px", marginBottom: 20,
+              }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>🗣 Avtomatik ovoz</div>
+                  <div style={{ fontSize: 11.5, color: "#9A9AA2" }}>JAY javoblarini o'zi ovozda o'qib bersin</div>
+                </div>
+                <div onClick={() => setAutoVoice(v => !v)} style={{
+                  width: 46, height: 26, borderRadius: 13, cursor: "pointer",
+                  background: autoVoice ? "#C41E24" : "#3A3A40", position: "relative", transition: "0.2s",
+                }}>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: "50%", background: "#FFF",
+                    position: "absolute", top: 3, left: autoVoice ? 23 : 3, transition: "0.2s",
+                  }} />
+                </div>
+              </div>
+
+              {user && (() => {
+                const myMsgs = convs.reduce((n, c) => n + c.msgs.filter(m => m.role === "user").length, 0);
+                const refLink = "https://t.me/jayai_uz_bot?start=" + (user.uid || "").slice(0, 8);
+                return (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                      <div style={{ flex: 1, background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 12 }}>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: "#E5484D" }}>{myMsgs}</div>
+                        <div style={{ fontSize: 11, color: "#9A9AA2" }}>Yuborilgan xabar</div>
+                      </div>
+                      <div style={{ flex: 1, background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 12 }}>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: "#E5484D" }}>{convs.length}</div>
+                        <div style={{ fontSize: 11, color: "#9A9AA2" }}>Suhbatlar</div>
+                      </div>
+                      <div style={{ flex: 1, background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 12 }}>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: mePremium ? "#F5C518" : "#9A9AA2" }}>{mePremium ? "💎" : "—"}</div>
+                        <div style={{ fontSize: 11, color: "#9A9AA2" }}>Premium</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>🎁 Do'stni taklif qiling</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input readOnly value={refLink} style={{
+                        flex: 1, background: "#161618", color: "#9A9AA2", border: "1px solid #3A3A40",
+                        borderRadius: 10, padding: "9px 12px", fontSize: 12, fontFamily: "system-ui, sans-serif",
+                      }} />
+                      <button onClick={() => copyText(refLink)} style={{
+                        background: "#C41E24", color: "#FFF", border: "none", borderRadius: 10,
+                        padding: "0 16px", fontSize: 13, cursor: "pointer", fontWeight: 600,
+                      }}>Nusxa</button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>{L.nameLabel}</div>
               <input value={settings.name}
                 onChange={e => setSettings(s => ({ ...s, name: e.target.value }))}
@@ -920,6 +1015,67 @@ export default function JayAI() {
               <div style={{ fontSize: 12, color: "#7A7A82", marginTop: 10 }}>
                 {L.saveNote}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==== PREMIUM ko'rinishi ==== */}
+        {view === "premium" && (
+          <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? 16 : 32 }}>
+            <div style={{ maxWidth: 560, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ fontSize: 44 }}>💎</div>
+                <div style={{ fontSize: 26, fontWeight: 700, marginTop: 6 }}>JAY Premium</div>
+                <div style={{ color: "#9A9AA2", fontSize: 14, marginTop: 6 }}>
+                  Cheksiz imkoniyatlar, tez javob va ustuvorlik
+                </div>
+              </div>
+
+              {mePremium ? (
+                <div style={{
+                  background: "linear-gradient(135deg, #5C4A00, #2A1215)", border: "1px solid #F5C518",
+                  borderRadius: 16, padding: 20, textAlign: "center", marginBottom: 20,
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#F5C518" }}>✓ Siz Premium foydalanuvchisiz!</div>
+                  <div style={{ color: "#D9D9DE", fontSize: 13, marginTop: 6 }}>Barcha imkoniyatlar ochiq. Rahmat! 🙏</div>
+                </div>
+              ) : (
+                <>
+                  {/* Tariflar */}
+                  <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 150, background: "#161618", border: "1px solid #26262B", borderRadius: 16, padding: 18 }}>
+                      <div style={{ fontSize: 14, color: "#9A9AA2" }}>Oddiy</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0" }}>Bepul</div>
+                      <div style={{ fontSize: 12.5, color: "#9A9AA2", lineHeight: 1.8 }}>
+                        ✓ Kunlik cheklangan xabar<br/>✓ Asosiy AI<br/>✓ Rasm yaratish
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 150, background: "linear-gradient(135deg, #2A1215, #161618)", border: "2px solid #C41E24", borderRadius: 16, padding: 18, position: "relative" }}>
+                      <div style={{ position: "absolute", top: -10, right: 14, background: "#C41E24", color: "#FFF", fontSize: 10, fontWeight: 700, padding: "2px 10px", borderRadius: 10 }}>MASHHUR</div>
+                      <div style={{ fontSize: 14, color: "#F5C518" }}>💎 Premium</div>
+                      <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0" }}>19 000<span style={{ fontSize: 13, color: "#9A9AA2" }}> so'm/oy</span></div>
+                      <div style={{ fontSize: 12.5, color: "#D9D9DE", lineHeight: 1.8 }}>
+                        ✓ <b>Cheksiz</b> xabar<br/>✓ Tez javob (ustuvor)<br/>✓ Barcha rejimlar<br/>✓ Reklama yo'q
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* To'lov (hozircha admin orqali) */}
+                  <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 16, padding: 18 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Premium olish</div>
+                    <div style={{ fontSize: 13, color: "#9A9AA2", lineHeight: 1.7, marginBottom: 14 }}>
+                      To'lov uchun quyidagi tugma orqali administratorga yozing. Tez orada avtomatik to'lov (Payme / Click) qo'shiladi.
+                    </div>
+                    <button onClick={() => {
+                      setView("support");
+                      setSupInput("Salom! Men Premium tarifni olmoqchiman.");
+                    }} style={{
+                      width: "100%", background: "#C41E24", color: "#FFF", border: "none",
+                      borderRadius: 12, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer",
+                    }}>💬 Premium uchun murojaat qilish</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1304,6 +1460,17 @@ export default function JayAI() {
                     <div style={{ fontSize: isMobile ? 24 : 32, fontWeight: 500, letterSpacing: "-1px" }}>
                       {L.greet(new Date().getHours())}{settings.name ? `, ${settings.name}` : ""}
                     </div>
+                    {cur?.mode === "image" && (
+                      <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginTop: 18, marginBottom: -6 }}>
+                        {[["Realistik", "realistic photo"], ["Anime", "anime style"], ["3D", "3d render"], ["Rasm", "digital painting"], ["Logo", "minimalist logo"]].map(([lbl, tag]) => (
+                          <button key={lbl} onClick={() => setInput(prev => (prev ? prev + ", " : "") + tag)} style={{
+                            background: "#161618", border: "1px solid #3A3A40", color: "#D9D9DE",
+                            borderRadius: 16, padding: "6px 12px", fontSize: 12, cursor: "pointer",
+                            fontFamily: "system-ui, sans-serif",
+                          }}>{lbl}</button>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ marginTop: 28, textAlign: "left" }}>{inputBar}</div>
                     <div style={{
                       display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap",
@@ -1383,10 +1550,19 @@ export default function JayAI() {
                                   : <CodeBlock key={j} lang={p.lang} value={p.value} onPreview={setPreview} />)
                               : <Md key={j} text={p.value} />
                           )}
-                          <button onClick={() => speak(m.content)} title="Ovozda eshitish" style={{
-                            background: "transparent", border: "none", color: "#7A7A82",
-                            cursor: "pointer", fontSize: 14, padding: "4px 0 0", display: "block",
-                          }}>🔊</button>
+                          <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+                            <button onClick={() => speak(m.content)} title="Ovozda eshitish" style={{
+                              background: "transparent", border: "none", color: "#7A7A82", cursor: "pointer", fontSize: 14,
+                            }}>🔊</button>
+                            <button onClick={() => copyText(m.content)} title="Nusxalash" style={{
+                              background: "transparent", border: "none", color: "#7A7A82", cursor: "pointer", fontSize: 14,
+                            }}>📋</button>
+                            {i === msgs.length - 1 && (
+                              <button onClick={regenerate} title="Qayta yaratish" style={{
+                                background: "transparent", border: "none", color: "#7A7A82", cursor: "pointer", fontSize: 14,
+                              }}>🔄</button>
+                            )}
+                          </div>
                         </>}
                     </div>
                   </div>
