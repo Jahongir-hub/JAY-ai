@@ -45,7 +45,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: system || "" }] },
             contents,
-            generationConfig: { maxOutputTokens: Math.min(max_tokens || 4000, 8000) },
+            generationConfig: { maxOutputTokens: Math.min(max_tokens || 4000, 8000), thinkingConfig: { thinkingBudget: 0 } },
             ...(model.startsWith("gemini") ? { tools: [{ google_search: {} }] } : {}),
           }),
         }
