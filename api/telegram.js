@@ -132,9 +132,9 @@ async function tg(method, body) {
 }
 
 // Rasmni avval o'zimiz yuklab olib, keyin Telegram'ga fayl sifatida yuboramiz (ishonchli)
-async function fetchImageBuffer(prompt, ms) {
+async function fetchImageBuffer(prompt, ms, extra) {
   const imgUrl = "https://image.pollinations.ai/prompt/" +
-    encodeURIComponent(prompt) + "?width=768&height=768&nologo=true&seed=" + Date.now();
+    encodeURIComponent(prompt) + "?width=512&height=512&nologo=true&seed=" + Date.now() + extra;
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), ms);
   try {
@@ -150,14 +150,13 @@ async function fetchImageBuffer(prompt, ms) {
 }
 
 async function sendGeneratedImage(chatId, prompt) {
-  // Vercel funksiyasi qisqa vaqtda tugashi mumkin — tezkor urinish qilamiz
-  let buf = await fetchImageBuffer(prompt, 8000);
-  if (!buf) buf = await fetchImageBuffer(prompt, 8000);
+  // "turbo" — Pollinations'ning tezlik uchun optimallangan rejimi
+  const buf = await fetchImageBuffer(prompt, 9200, "&model=turbo");
 
   if (!buf) {
     await tg("sendMessage", {
       chat_id: chatId,
-      text: "😔 Rasm hozir sekin javob berayapti. Yana bir marta yozib ko'ring — ba'zan ikkinchi urinishda chiqadi 🙏",
+      text: "😔 Rasm generatori hozir sekinlashib qolgan. Iltimos, saytdan urinib ko'ring: jayai.vercel.app (u yerda rasm doim tez ishlaydi) 🙏\n\nYoki bir necha daqiqadan keyin bu yerda qayta urining.",
       reply_markup: KEYBOARD,
     });
     return false;
