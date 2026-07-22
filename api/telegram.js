@@ -132,35 +132,50 @@ async function tg(method, body) {
 }
 
 // Rasmni avval o'zimiz yuklab olib, keyin Telegram'ga fayl sifatida yuboramiz (ishonchli)
-async function sendGeneratedImage(chatId, prompt) {
+async function fetchImageBuffer(prompt, ms) {
   const imgUrl = "https://image.pollinations.ai/prompt/" +
-    encodeURIComponent(prompt) + "?width=1024&height=1024&nologo=true&seed=" + Date.now();
+    encodeURIComponent(prompt) + "?width=768&height=768&nologo=true&seed=" + Date.now();
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), ms);
   try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 25000);
     const ir = await fetch(imgUrl, { signal: ctrl.signal });
     clearTimeout(timeout);
-    if (!ir.ok) throw new Error("fetch failed " + ir.status);
+    if (!ir.ok) return null;
     const buf = Buffer.from(await ir.arrayBuffer());
-    if (buf.length < 500) throw new Error("empty image");
+    return buf.length > 500 ? buf : null;
+  } catch (e) {
+    clearTimeout(timeout);
+    return null;
+  }
+}
 
+async function sendGeneratedImage(chatId, prompt) {
+  // Vercel funksiyasi qisqa vaqtda tugashi mumkin — tezkor urinish qilamiz
+  let buf = await fetchImageBuffer(prompt, 8000);
+  if (!buf) buf = await fetchImageBuffer(prompt, 8000);
+
+  if (!buf) {
+    await tg("sendMessage", {
+      chat_id: chatId,
+      text: "😔 Rasm hozir sekin javob berayapti. Yana bir marta yozib ko'ring — ba'zan ikkinchi urinishda chiqadi 🙏",
+      reply_markup: KEYBOARD,
+    });
+    return false;
+  }
+
+  try {
     const form = new FormData();
     form.append("chat_id", String(chatId));
     form.append("caption", "🖼 " + prompt.slice(0, 100));
     form.append("photo", new Blob([buf], { type: "image/jpeg" }), "jay.jpg");
     form.append("reply_markup", JSON.stringify(KEYBOARD));
-
     const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
       method: "POST", body: form,
     });
     const d = await r.json();
     return d.ok;
   } catch (e) {
-    await tg("sendMessage", {
-      chat_id: chatId,
-      text: "😔 Rasm yaratib bo'lmadi (server band bo'lishi mumkin). Qayta urinib ko'ring 🙏",
-      reply_markup: KEYBOARD,
-    });
+    await tg("sendMessage", { chat_id: chatId, text: "😔 Yuborishda xatolik. Qayta urinib ko'ring 🙏", reply_markup: KEYBOARD });
     return false;
   }
 }
