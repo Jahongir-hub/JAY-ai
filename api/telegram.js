@@ -11,11 +11,13 @@ const MODELS = [
 
 const KEYBOARD = {
   keyboard: [
-    [{ text: "🆘 Adminga murojaat" }],
+    [{ text: "🖼 Rasm yaratish" }, { text: "🆘 Adminga murojaat" }],
     [{ text: "🌐 Sayt" }, { text: "ℹ️ JAY haqida" }],
   ],
   resize_keyboard: true,
 };
+
+const IMG_MARK = "🎨 Qanday rasm kerak? SHU XABARGA JAVOB (reply) qilib tavsifini yozing:";
 
 const SUP_MARK = "✍️ Murojaatingizni SHU XABARGA JAVOB (reply) qilib yozing — admin tez orada javob beradi.";
 
@@ -78,6 +80,44 @@ async function saveTgUser(chatId, fields) {
       } }),
     });
   } catch (e) {}
+}
+
+// Ovozli xabarni Gemini orqali matnga aylantirish
+async function transcribeVoice(fileId) {
+  try {
+    const fr = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`);
+    const fd = await fr.json();
+    if (!fd.ok) return null;
+    const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${fd.result.file_path}`;
+    const ar = await fetch(fileUrl);
+    const buf = Buffer.from(await ar.arrayBuffer());
+    if (buf.length > 8 * 1024 * 1024) return null;
+    const b64 = buf.toString("base64");
+
+    for (const model of MODELS) {
+      if (!model.startsWith("gemini")) continue;
+      const r = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" +
+          process.env.GEMINI_API_KEY,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [
+              { inline_data: { mime_type: "audio/ogg", data: b64 } },
+              { text: "Bu ovozli xabarni aynan aytilganidek matnga ko'chir. Faqat matnni yoz, izohsiz." },
+            ] }],
+          }),
+        }
+      );
+      const data = await r.json();
+      if (r.ok) {
+        const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("").trim();
+        if (text) return text;
+      }
+    }
+  } catch (e) {}
+  return null;
 }
 
 async function tg(method, body) {
@@ -170,6 +210,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    if (text === "🖼 Rasm yaratish") {
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: IMG_MARK,
+        reply_markup: { force_reply: true },
+      });
+      return res.status(200).json({ ok: true });
+    }
+
     if (text === "🌐 Sayt") {
       await tg("sendMessage", {
         chat_id: chatId,
@@ -184,6 +233,53 @@ export default async function handler(req, res) {
         chat_id: chatId,
         text: "🤖 JAY AI — Jahongir AI Yasadi\n\nBepul o'zbek AI yordamchisi. Yaratuvchi: ISHIMOV JAHONGIR.\n\n💬 Savol-javob, kod, tarjima, maslahat\n🖼 Rasm yaratish (saytda)\n🌐 jayai.vercel.app",
         reply_markup: KEYBOARD,
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ===== Rasm yaratish (reply orqali) =====
+    if (msg.reply_to_message && (msg.reply_to_message.text || "").startsWith("🎨") && text) {
+      await tg("sendChatAction", { chat_id: chatId, action: "upload_photo" });
+      const imgUrl = "https://image.pollinations.ai/prompt/" +
+        encodeURIComponent(text) + "?width=1024&height=1024&nologo=true";
+      await tg("sendPhoto", {
+        chat_id: chatId,
+        photo: imgUrl,
+        caption: "🖼 " + text.slice(0, 100),
+        reply_markup: KEYBOARD,
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ===== Ovozli xabar =====
+    if (msg.voice) {
+      await tg("sendChatAction", { chat_id: chatId, action: "typing" });
+      const spoken = await transcribeVoice(msg.voice.file_id);
+      if (!spoken) {
+        await tg("sendMessage", { chat_id: chatId, text: "Ovozni tushuna olmadim, qayta urinib ko'ring 🎙", reply_markup: KEYBOARD });
+        return res.status(200).json({ ok: true });
+      }
+      await tg("sendChatAction", { chat_id: chatId, action: "typing" });
+      const reply = await askGemini(spoken);
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: "🎙 Siz: " + spoken + "\n\n" + reply.slice(0, 3800),
+        reply_markup: KEYBOARD,
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ===== Admin: /stats =====
+    if (isAdmin && text === "/stats") {
+      let count = 0;
+      try {
+        const r = await fetch(FS_BASE + "/tg_users?pageSize=300");
+        const d = await r.json();
+        count = (d.documents || []).length;
+      } catch (e) {}
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: "📊 Bot statistikasi:\n👥 Ro'yxatdan o'tganlar: " + count + (count >= 300 ? "+" : ""),
       });
       return res.status(200).json({ ok: true });
     }
