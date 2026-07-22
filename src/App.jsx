@@ -14,6 +14,10 @@ const MODES = {
   learn:  { label: "Learn",  icon: "🎓", extra: "\n\nHOZIRGI REJIM: LEARN. Sen sabrli o'qituvchisan. Mavzuni oddiy tildan, bosqichma-bosqich, misollar bilan tushuntir. Oxirida bilimni tekshirish uchun 1 ta savol ber." },
   life:   { label: "Hayotiy", icon: "☕", extra: "\n\nHOZIRGI REJIM: HAYOTIY. Sen do'stona hayotiy maslahatchisan — kundalik ishlar, retseptlar, rejalar, sog'lom turmush, munosabatlar bo'yicha samimiy va amaliy maslahat berasan." },
   image:  { label: "Rasm", icon: "🖼", extra: "" },
+  ustoz: { label: "Ustoz", icon: "👨‍🏫", extra: "\n\nHOZIRGI REJIM: USTOZ. Sen tajribali, sabrli ustozsan. Har mavzuni sodda misollar bilan, bosqichma-bosqich tushuntirasan. Talabani rag'batlantirasan, xatolarini yumshoq to'g'irlaysan." },
+  dost: { label: "Do'st", icon: "🤝", extra: "\n\nHOZIRGI REJIM: DO'ST. Sen samimiy, quvnoq do'stsan. Erkin, do'stona ohangda gaplashasan, hazil ham qilasan, qo'llab-quvvatlaysan. Rasmiyatchiliksiz suhbatlashasan." },
+  psixolog: { label: "Suhbatdosh", icon: "🧠", extra: "\n\nHOZIRGI REJIM: SUHBATDOSH. Sen diqqat bilan tinglaydigsan, hukm qilmaysan, his-tuyg'ularni tushunishga yordam berasan. MUHIM: sen psixolog EMASSAN — jiddiy ruhiy qiyinchiliklar, o'z joniga qasd fikri kabi holatlarda ALBATTA mutaxassisga (psixolog, ishonch telefoni) murojaat qilishni tavsiya qil." },
+  biznes: { label: "Biznes", icon: "💼", extra: "\n\nHOZIRGI REJIM: BIZNES. Sen tajribali biznes-maslahatchisan. Marketing, sotuv, strategiya, moliya bo'yicha amaliy, konkret maslahatlar berasan. O'zbekiston bozorini hisobga olasan." },
   choice: { label: "JAY tanlovi", icon: "💡", extra: "\n\nHOZIRGI REJIM: JAY TANLOVI. Foydalanuvchiga o'zing qiziqarli mavzu tanlab ber: hayratlanarli fakt, foydali maslahat, qiziqarli savol yoki mini-o'yin taklif qil. Kreativ va qiziqarli bo'l." },
   code:   { label: "Code",   icon: "</>", extra: "\n\nHOZIRGI REJIM: CODE. Sen professional dasturchi yordamchisisan. Kod yozish, xatolarni topish, tushuntirish — asosiy vazifang. Kodni doim ```til ... ``` blokda ber." },
   design: { label: "Design", icon: "🎨", extra: "\n\nHOZIRGI REJIM: DESIGN. Sen professional veb-dizaynersan. Chiroyli, zamonaviy sayt va sahifalar yasaysan. Har doim to'liq HTML (CSS ichida) yozib, ```html blokda ber. Dizaynga alohida e'tibor ber: ranglar, shriftlar, animatsiyalar." },
@@ -315,6 +319,8 @@ export default function JayAI() {
   const [adminSearch, setAdminSearch] = useState("");
   const [adminSort, setAdminSort] = useState("updated");
   const [autoVoice, setAutoVoice] = useState(false);
+  const [streak, setStreak] = useState(1);
+  const [chatSearch, setChatSearch] = useState("");
   const [regen, setRegen] = useState(0);
   const [supMsgs, setSupMsgs] = useState([]);      // mening yordam suhbatim
   const [supInput, setSupInput] = useState("");
@@ -349,6 +355,20 @@ export default function JayAI() {
         if (u.displayName) setSettings(st => ({ ...st, name: st.name || u.displayName.split(" ")[0] }));
       }
     });
+  }, []);
+
+  useEffect(() => {
+    // Kunlik streak
+    try {
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      const saved = JSON.parse(localStorage.getItem("jay-streak") || "{}");
+      let st = 1;
+      if (saved.last === today) st = saved.streak || 1;
+      else if (saved.last === yesterday) st = (saved.streak || 1) + 1;
+      localStorage.setItem("jay-streak", JSON.stringify({ last: today, streak: st }));
+      setStreak(st);
+    } catch (e) {}
   }, []);
 
   useEffect(() => {
@@ -789,13 +809,13 @@ export default function JayAI() {
               width: 8, height: 8, borderRadius: "50%", background: "#E5484D", marginLeft: "auto",
             }} />}
           </button>
+          <button onClick={() => { setView("favs"); if (isMobile) setSideOpen(false); }}
+            style={{ ...S.sideBtn, background: view === "favs" ? "#222228" : "transparent" }}>
+            ⭐ Saqlanganlar
+          </button>
           <a href="https://t.me/jayai_uz_bot" target="_blank" rel="noopener" style={{
             ...S.sideBtn, textDecoration: "none",
           }}>✈️ Telegram bot</a>
-          <button onClick={() => { setView("premium"); if (isMobile) setSideOpen(false); }}
-            style={{ ...S.sideBtn, background: view === "premium" ? "#222228" : "transparent" }}>
-            💎 Premium
-          </button>
           {user && user.email === ADMIN_EMAIL && (
             <button onClick={async () => { setView("admin"); setAdminUsers(await listUsers()); setAdminSup(await listSupport()); }}
               style={{ ...S.sideBtn, background: view === "admin" ? "#222228" : "transparent" }}>
@@ -810,8 +830,15 @@ export default function JayAI() {
           <button onClick={() => addChat("design")} style={S.sideBtn}>🎨 Design</button>
 
           <div style={S.sect}>{L.recents}</div>
+          <input value={chatSearch} onChange={e => setChatSearch(e.target.value)}
+            placeholder="🔍 Qidirish..."
+            style={{
+              background: "#161618", color: "#EDEDED", border: "1px solid #26262B",
+              borderRadius: 10, padding: "7px 12px", fontSize: 12.5, outline: "none",
+              fontFamily: "system-ui, sans-serif", margin: "0 2px 8px",
+            }} />
           <div style={{ flex: 1, overflowY: "auto" }}>
-            {convs.map(c => (
+            {convs.filter(c => !chatSearch.trim() || c.title.toLowerCase().includes(chatSearch.trim().toLowerCase())).map(c => (
               <div key={c.id} onClick={() => { setCurId(c.id); setView("chat"); if (isMobile) setSideOpen(false); }} style={{
                 ...S.sideBtn,
                 background: c.id === cur?.id && view === "chat" ? "#222228" : "transparent",
@@ -820,6 +847,13 @@ export default function JayAI() {
                 <span style={{
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontSize: 13.5,
                 }}>{c.mode === "code" ? "‹› " : c.mode === "design" ? "🎨 " : ""}{c.title}</span>
+                <span onClick={e => {
+                  e.stopPropagation();
+                  const nn = window.prompt("Yangi nom:", c.title);
+                  if (nn && nn.trim()) setConvs(cs => cs.map(x => x.id === c.id ? { ...x, title: nn.trim().slice(0, 40) } : x));
+                }} style={{
+                  color: "#7A7A82", fontSize: 12, padding: "0 3px", cursor: "pointer",
+                }}>✎</span>
                 <span onClick={e => delChat(c.id, e)} style={{
                   color: "#7A7A82", fontSize: 15, padding: "0 4px", cursor: "pointer",
                 }}>×</span>
@@ -876,9 +910,30 @@ export default function JayAI() {
             background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
             borderRadius: 8, padding: "5px 11px", fontSize: 15, cursor: "pointer",
           }}>☰</button>
+          <span title="Ketma-ket kunlar" style={{
+            fontFamily: "system-ui, sans-serif", fontSize: 13, color: "#F5A623",
+            background: "#2A1F0E", border: "1px solid #5C4A00", borderRadius: 10,
+            padding: "3px 10px", fontWeight: 700, whiteSpace: "nowrap",
+          }}>🔥 {streak}</span>
           <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
-            {view === "artifacts" ? "Artifacts" : view === "customize" ? L.settingsTitle : view === "admin" ? L.adminPanel : view === "support" ? "🆘 Yordam" : view === "premium" ? "💎 Premium" : (cur?.title || "JAY AI")}
+            {view === "artifacts" ? "Artifacts" : view === "customize" ? L.settingsTitle : view === "admin" ? L.adminPanel : view === "support" ? "🆘 Yordam" : view === "favs" ? "⭐ Saqlanganlar" : (cur?.title || "JAY AI")}
           </span>
+          {view === "chat" && msgs.length > 0 && (
+            <button onClick={() => {
+              const txt = "JAY AI — " + (cur?.title || "Suhbat") + "\n\n" +
+                msgs.map(m => (m.role === "user" ? "👤 Men: " : "🤖 JAY: ") + m.content).join("\n\n");
+              const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = (cur?.title || "suhbat").replace(/[^a-zA-Z0-9а-яА-Яёo'gʻ ]/g, "").slice(0, 30) + ".txt";
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }} title="Yuklab olish" style={{
+              background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
+              borderRadius: 8, padding: "5px 10px", fontSize: 13, cursor: "pointer",
+              fontFamily: "system-ui, sans-serif", marginRight: 6,
+            }}>📥</button>
+          )}
           {view === "chat" && msgs.length > 0 && (
             <button onClick={shareChat} title="Suhbatni ulashish" style={{
               background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
@@ -1019,66 +1074,40 @@ export default function JayAI() {
           </div>
         )}
 
-        {/* ==== PREMIUM ko'rinishi ==== */}
-        {view === "premium" && (
-          <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? 16 : 32 }}>
-            <div style={{ maxWidth: 560, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
-              <div style={{ textAlign: "center", marginBottom: 24 }}>
-                <div style={{ fontSize: 44 }}>💎</div>
-                <div style={{ fontSize: 26, fontWeight: 700, marginTop: 6 }}>JAY Premium</div>
-                <div style={{ color: "#9A9AA2", fontSize: 14, marginTop: 6 }}>
-                  Cheksiz imkoniyatlar, tez javob va ustuvorlik
-                </div>
+        {/* ==== SAQLANGANLAR ==== */}
+        {view === "favs" && (() => {
+          const favs = [];
+          convs.forEach(c => c.msgs.forEach(m => {
+            if (m.fav && m.role === "assistant") favs.push({ chat: c.title, content: m.content });
+          }));
+          return (
+            <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? 14 : 24 }}>
+              <div style={{ maxWidth: 720, margin: "0 auto" }}>
+                {favs.length === 0 ? (
+                  <div style={{ textAlign: "center", marginTop: 60, color: "#8F8F8F", fontFamily: "system-ui, sans-serif" }}>
+                    <div style={{ fontSize: 40, marginBottom: 10 }}>⭐</div>
+                    Hali saqlangan javoblar yo'q.<br/>Yoqqan javob ostidagi ☆ ni bosing.
+                  </div>
+                ) : favs.map((f, i) => (
+                  <div key={i} style={{
+                    background: "#161618", border: "1px solid #26262B", borderRadius: 14,
+                    padding: 16, marginBottom: 12,
+                  }}>
+                    <div style={{ fontSize: 11, color: "#F5C518", marginBottom: 8, fontFamily: "system-ui, sans-serif" }}>
+                      ⭐ {f.chat}
+                    </div>
+                    <div style={{ fontSize: 14.5, lineHeight: 1.6 }}><Md text={f.content} /></div>
+                    <button onClick={() => copyText(f.content)} style={{
+                      marginTop: 10, background: "transparent", border: "1px solid #3A3A40",
+                      color: "#9A9AA2", borderRadius: 8, padding: "5px 14px", fontSize: 12, cursor: "pointer",
+                      fontFamily: "system-ui, sans-serif",
+                    }}>📋 Nusxalash</button>
+                  </div>
+                ))}
               </div>
-
-              {mePremium ? (
-                <div style={{
-                  background: "linear-gradient(135deg, #5C4A00, #2A1215)", border: "1px solid #F5C518",
-                  borderRadius: 16, padding: 20, textAlign: "center", marginBottom: 20,
-                }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#F5C518" }}>✓ Siz Premium foydalanuvchisiz!</div>
-                  <div style={{ color: "#D9D9DE", fontSize: 13, marginTop: 6 }}>Barcha imkoniyatlar ochiq. Rahmat! 🙏</div>
-                </div>
-              ) : (
-                <>
-                  {/* Tariflar */}
-                  <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 150, background: "#161618", border: "1px solid #26262B", borderRadius: 16, padding: 18 }}>
-                      <div style={{ fontSize: 14, color: "#9A9AA2" }}>Oddiy</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0" }}>Bepul</div>
-                      <div style={{ fontSize: 12.5, color: "#9A9AA2", lineHeight: 1.8 }}>
-                        ✓ Kunlik cheklangan xabar<br/>✓ Asosiy AI<br/>✓ Rasm yaratish
-                      </div>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 150, background: "linear-gradient(135deg, #2A1215, #161618)", border: "2px solid #C41E24", borderRadius: 16, padding: 18, position: "relative" }}>
-                      <div style={{ position: "absolute", top: -10, right: 14, background: "#C41E24", color: "#FFF", fontSize: 10, fontWeight: 700, padding: "2px 10px", borderRadius: 10 }}>MASHHUR</div>
-                      <div style={{ fontSize: 14, color: "#F5C518" }}>💎 Premium</div>
-                      <div style={{ fontSize: 24, fontWeight: 700, margin: "6px 0" }}>19 000<span style={{ fontSize: 13, color: "#9A9AA2" }}> so'm/oy</span></div>
-                      <div style={{ fontSize: 12.5, color: "#D9D9DE", lineHeight: 1.8 }}>
-                        ✓ <b>Cheksiz</b> xabar<br/>✓ Tez javob (ustuvor)<br/>✓ Barcha rejimlar<br/>✓ Reklama yo'q
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* To'lov (hozircha admin orqali) */}
-                  <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 16, padding: 18 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Premium olish</div>
-                    <div style={{ fontSize: 13, color: "#9A9AA2", lineHeight: 1.7, marginBottom: 14 }}>
-                      To'lov uchun quyidagi tugma orqali administratorga yozing. Tez orada avtomatik to'lov (Payme / Click) qo'shiladi.
-                    </div>
-                    <button onClick={() => {
-                      setView("support");
-                      setSupInput("Salom! Men Premium tarifni olmoqchiman.");
-                    }} style={{
-                      width: "100%", background: "#C41E24", color: "#FFF", border: "none",
-                      borderRadius: 12, padding: "12px 0", fontSize: 14, fontWeight: 600, cursor: "pointer",
-                    }}>💬 Premium uchun murojaat qilish</button>
-                  </div>
-                </>
-              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ==== YORDAM ko'rinishi ==== */}
         {view === "support" && (
@@ -1483,6 +1512,10 @@ export default function JayAI() {
                         ["life", "☕ Hayotiy"],
                         ["image", "🖼 Rasm"],
                         ["choice", "💡 JAY tanlovi"],
+                        ["ustoz", "👨‍🏫 Ustoz"],
+                        ["dost", "🤝 Do'st"],
+                        ["psixolog", "🧠 Suhbatdosh"],
+                        ["biznes", "💼 Biznes"],
                       ].map(([mode, label]) => (
                         <button key={mode}
                           onClick={() => {
@@ -1557,6 +1590,12 @@ export default function JayAI() {
                             <button onClick={() => copyText(m.content)} title="Nusxalash" style={{
                               background: "transparent", border: "none", color: "#7A7A82", cursor: "pointer", fontSize: 14,
                             }}>📋</button>
+                            <button onClick={() => {
+                              updateCur(c => ({ ...c, msgs: c.msgs.map((x, xi) => xi === i ? { ...x, fav: !x.fav } : x) }));
+                            }} title="Saqlash" style={{
+                              background: "transparent", border: "none",
+                              color: m.fav ? "#F5C518" : "#7A7A82", cursor: "pointer", fontSize: 14,
+                            }}>{m.fav ? "★" : "☆"}</button>
                             {i === msgs.length - 1 && (
                               <button onClick={regenerate} title="Qayta yaratish" style={{
                                 background: "transparent", border: "none", color: "#7A7A82", cursor: "pointer", fontSize: 14,
