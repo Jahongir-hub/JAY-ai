@@ -131,6 +131,40 @@ async function tg(method, body) {
   } catch (e) { return null; }
 }
 
+// Rasmni avval o'zimiz yuklab olib, keyin Telegram'ga fayl sifatida yuboramiz (ishonchli)
+async function sendGeneratedImage(chatId, prompt) {
+  const imgUrl = "https://image.pollinations.ai/prompt/" +
+    encodeURIComponent(prompt) + "?width=1024&height=1024&nologo=true&seed=" + Date.now();
+  try {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 25000);
+    const ir = await fetch(imgUrl, { signal: ctrl.signal });
+    clearTimeout(timeout);
+    if (!ir.ok) throw new Error("fetch failed " + ir.status);
+    const buf = Buffer.from(await ir.arrayBuffer());
+    if (buf.length < 500) throw new Error("empty image");
+
+    const form = new FormData();
+    form.append("chat_id", String(chatId));
+    form.append("caption", "🖼 " + prompt.slice(0, 100));
+    form.append("photo", new Blob([buf], { type: "image/jpeg" }), "jay.jpg");
+    form.append("reply_markup", JSON.stringify(KEYBOARD));
+
+    const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+      method: "POST", body: form,
+    });
+    const d = await r.json();
+    return d.ok;
+  } catch (e) {
+    await tg("sendMessage", {
+      chat_id: chatId,
+      text: "😔 Rasm yaratib bo'lmadi (server band bo'lishi mumkin). Qayta urinib ko'ring 🙏",
+      reply_markup: KEYBOARD,
+    });
+    return false;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(200).send("JAY AI Telegram bot ishlayapti ✓");
   try {
@@ -240,14 +274,7 @@ export default async function handler(req, res) {
     // ===== Rasm yaratish (reply orqali) =====
     if (msg.reply_to_message && (msg.reply_to_message.text || "").startsWith("🎨") && text) {
       await tg("sendChatAction", { chat_id: chatId, action: "upload_photo" });
-      const imgUrl = "https://image.pollinations.ai/prompt/" +
-        encodeURIComponent(text) + "?width=1024&height=1024&nologo=true";
-      await tg("sendPhoto", {
-        chat_id: chatId,
-        photo: imgUrl,
-        caption: "🖼 " + text.slice(0, 100),
-        reply_markup: KEYBOARD,
-      });
+      await sendGeneratedImage(chatId, text);
       return res.status(200).json({ ok: true });
     }
 
@@ -329,6 +356,14 @@ export default async function handler(req, res) {
         text: "Hozircha faqat matnli xabarlarni tushunaman 🙂 Rasm va fayllar uchun: jayai.vercel.app",
         reply_markup: KEYBOARD,
       });
+      return res.status(200).json({ ok: true });
+    }
+
+    // ===== Rasm so'rovini avtomatik aniqlash =====
+    const imgWords = /(rasm|surat|chizib?\s?ber|chiz\b|image|photo|painting)/i;
+    if (imgWords.test(text) && /(chiz|yasa|ber|create|draw|generate)/i.test(text)) {
+      await tg("sendChatAction", { chat_id: chatId, action: "upload_photo" });
+      await sendGeneratedImage(chatId, text);
       return res.status(200).json({ ok: true });
     }
 
