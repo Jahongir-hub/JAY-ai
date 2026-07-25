@@ -213,6 +213,19 @@ function CodeBlock({ lang, value, onPreview }) {
   );
 }
 
+const THEMES = {
+  dark: {
+    bg: "#0C0C0E", side: "#111114", card: "#161618", border: "#26262B",
+    text: "#EDEDED", dim: "#9A9AA2", dim2: "#7A7A82", hover: "#222228",
+    inputBg: "#0C0C0E", codeBg: "#121216", codeHead: "#1A1A1E", brd2: "#3A3A40",
+  },
+  light: {
+    bg: "#FAF9F7", side: "#F2F0EC", card: "#FFFFFF", border: "#E3E0DA",
+    text: "#1A1A1A", dim: "#6B6B6B", dim2: "#8A8A8A", hover: "#EDEAE4",
+    inputBg: "#FFFFFF", codeBg: "#F5F3EF", codeHead: "#EAE7E1", brd2: "#D5D1C9",
+  },
+};
+
 const LANGS = {
   uz: {
     newChat: "+ Yangi chat", chats: "💬 Chatlar", settings: "⚙️ Sozlash", admin: "🛠 Admin",
@@ -319,6 +332,12 @@ export default function JayAI() {
   const [adminSearch, setAdminSearch] = useState("");
   const [adminSort, setAdminSort] = useState("updated");
   const [autoVoice, setAutoVoice] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem("jay-theme") || "dark"; } catch (e) { return "dark"; }
+  });
+  const [guestMode, setGuestMode] = useState(() => {
+    try { return localStorage.getItem("jay-guest") === "1"; } catch (e) { return false; }
+  });
   const [streak, setStreak] = useState(1);
   const [chatSearch, setChatSearch] = useState("");
   const [regen, setRegen] = useState(0);
@@ -331,6 +350,11 @@ export default function JayAI() {
   const endRef = useRef(null);
 
   const L = LANGS[settings.lang] || LANGS.uz;
+  const T = THEMES[theme] || THEMES.dark;
+  useEffect(() => {
+    try { localStorage.setItem("jay-theme", theme); } catch (e) {}
+    try { document.body.style.background = (THEMES[theme] || THEMES.dark).bg; } catch (e) {}
+  }, [theme]);
   const cur = convs.find(c => c.id === curId) || convs[0];
   const msgs = cur ? cur.msgs : [];
 
@@ -669,16 +693,16 @@ export default function JayAI() {
   const S = {
     sideBtn: {
       display: "flex", alignItems: "center", gap: 10, width: "100%",
-      background: "transparent", border: "none", color: "#D9D9DE",
+      background: "transparent", border: "none", color: T.text,
       padding: "9px 12px", borderRadius: 10, fontSize: 14, cursor: "pointer",
       fontFamily: "system-ui, sans-serif", textAlign: "left",
     },
     sect: {
-      fontSize: 11, color: "#7A7A82", padding: "10px 12px 5px",
+      fontSize: 11, color: T.dim2, padding: "10px 12px 5px",
       fontFamily: "system-ui, sans-serif", textTransform: "uppercase", letterSpacing: 1,
     },
     inp: {
-      width: "100%", background: "#161618", border: "1px solid #3A3A40", color: "#EDEDED",
+      width: "100%", background: T.card, border: "1px solid " + T.brd2, color: T.text,
       borderRadius: 12, padding: "11px 14px", fontSize: 14, outline: "none",
       fontFamily: "system-ui, sans-serif", boxSizing: "border-box",
     },
@@ -693,8 +717,8 @@ export default function JayAI() {
                 }}>
                   {files.map((f, k) => (
                     <span key={k} style={{
-                      background: "#222228", border: "1px solid #3A3A40", borderRadius: 10,
-                      padding: "5px 10px", fontSize: 12, color: "#D9D9DE",
+                      background: T.hover, border: "1px solid " + T.brd2, borderRadius: 10,
+                      padding: "5px 10px", fontSize: 12, color: T.text,
                       display: "flex", alignItems: "center", gap: 6,
                     }}>
                       {f.kind === "image" ? "🖼" : "📄"} {f.name}
@@ -706,19 +730,19 @@ export default function JayAI() {
               )}
               <div style={{
                 maxWidth: 760, margin: "0 auto", display: "flex", gap: 10,
-                background: "#161618", border: "1px solid #26262B", borderRadius: 18,
+                background: T.card, border: "1px solid " + T.border, borderRadius: 18,
                 padding: 8, boxShadow: "0 2px 12px rgba(196,30,36,0.12)",
               }}>
                 <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple
                   onChange={pickFiles} style={{ display: "none" }} />
                 <button onClick={() => fileRef.current?.click()} title="Rasm yoki PDF biriktirish" style={{
-                  background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
+                  background: "transparent", border: "1px solid " + T.brd2, color: T.text,
                   borderRadius: 12, padding: isMobile ? "0 9px" : "0 14px", fontSize: isMobile ? 15 : 17, cursor: "pointer",
                 }}>📎</button>
                 <button onClick={toggleMic} title="Ovoz bilan yozish" style={{
                   background: listening ? "#C41E24" : "transparent",
-                  border: "1px solid " + (listening ? "#C41E24" : "#3A3A40"),
-                  color: "#D9D9DE", borderRadius: 12, padding: isMobile ? "0 9px" : "0 14px", fontSize: isMobile ? 15 : 17, cursor: "pointer",
+                  border: "1px solid " + (listening ? "#C41E24" : T.brd2),
+                  color: T.text, borderRadius: 12, padding: isMobile ? "0 9px" : "0 14px", fontSize: isMobile ? 15 : 17, cursor: "pointer",
                 }}>🎙</button>
                 <textarea
                   value={input}
@@ -727,24 +751,24 @@ export default function JayAI() {
                   placeholder={L.placeholder}
                   rows={1}
                   style={{
-                    flex: 1, resize: "none", background: "transparent", color: "#EDEDED",
+                    flex: 1, resize: "none", background: "transparent", color: T.text,
                     border: "none", padding: "10px 12px",
                     fontSize: 15, outline: "none", fontFamily: "system-ui, sans-serif",
                   }}
                 />
                 <button onClick={() => setPower(pw => pw === "high" ? "low" : "high")}
                   title="Javob rejimi" style={{
-                  background: "transparent", border: "none", color: "#9A9AA2",
+                  background: "transparent", border: "none", color: T.dim,
                   fontSize: 12.5, cursor: "pointer", fontFamily: "system-ui, sans-serif",
                   display: "flex", alignItems: "center", gap: 4, padding: "0 6px", whiteSpace: "nowrap",
                 }}>
-                  {!isMobile && <span style={{ fontWeight: 700, color: "#EDEDED" }}>JAY 5</span>}
+                  {!isMobile && <span style={{ fontWeight: 700, color: T.text }}>JAY 5</span>}
                   <span style={{ color: "#E5484D" }}>{power === "high" ? "High" : "Low"}</span>
                   <span style={{ fontSize: 9 }}>▼</span>
                 </button>
                 <button onClick={send} disabled={loading || (!input.trim() && files.length === 0)} style={{
-                  background: loading || (!input.trim() && files.length === 0) ? "#1E1E20" : "#C41E24",
-                  color: loading || (!input.trim() && files.length === 0) ? "#5A5A5A" : "#FFF",
+                  background: loading || (!input.trim() && files.length === 0) ? T.hover : "#C41E24",
+                  color: loading || (!input.trim() && files.length === 0) ? T.dim2 : "#FFF",
                   border: "none", borderRadius: 12, padding: isMobile ? "0 13px" : "0 20px", fontWeight: 600,
                   fontSize: isMobile ? 13 : 14, cursor: loading ? "default" : "pointer",
                   fontFamily: "system-ui, sans-serif",
@@ -753,10 +777,95 @@ export default function JayAI() {
             </div>
   );
 
+  // ===== KIRISH SAHIFASI =====
+  if (!user && !guestMode) {
+    return (
+      <div style={{
+        minHeight: "100vh", background: T.bg, color: T.text,
+        display: "flex", flexDirection: "column", fontFamily: "Georgia, serif",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: isMobile ? "16px 18px" : "22px 34px",
+        }}>
+          <Logo size={26} />
+          <span style={{ fontWeight: 700, fontSize: 19, letterSpacing: "-0.3px" }}>JAY AI</span>
+          <button onClick={() => setTheme(t2 => t2 === "dark" ? "light" : "dark")} style={{
+            marginLeft: "auto", background: "transparent", border: "1px solid " + T.brd2,
+            color: T.text, borderRadius: 8, padding: "5px 10px", fontSize: 14, cursor: "pointer",
+          }}>{theme === "dark" ? "☀️" : "🌙"}</button>
+        </div>
+
+        <div style={{
+          flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+          padding: isMobile ? "10px 18px 50px" : "10px 34px 70px",
+        }}>
+          <div style={{ width: "100%", maxWidth: 420, textAlign: "center" }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+              <Logo size={54} />
+            </div>
+
+            <div style={{
+              fontSize: isMobile ? 34 : 44, fontWeight: 500, letterSpacing: "-1.5px", lineHeight: 1.15,
+            }}>Savolingiz bormi?</div>
+
+            <div style={{
+              color: T.dim, fontSize: isMobile ? 14.5 : 16, marginTop: 12,
+              fontFamily: "system-ui, sans-serif",
+            }}>JAY AI — bepul o'zbek sun'iy intellekt yordamchingiz</div>
+
+            <div style={{
+              background: T.card, border: "1px solid " + T.border, borderRadius: 18,
+              padding: isMobile ? 20 : 26, marginTop: 30,
+            }}>
+              <button onClick={() => loginGoogle().catch(() => {})} style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                width: "100%", background: "#FFF", color: "#1A1A1A", border: "none",
+                borderRadius: 12, padding: "13px 0", fontSize: 14.5, fontWeight: 600,
+                cursor: "pointer", fontFamily: "system-ui, sans-serif",
+              }}>
+                <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 5.9 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34 5.9 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C41 35.4 44 30.2 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+                Google bilan kirish
+              </button>
+
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, margin: "16px 0",
+                color: T.dim2, fontSize: 12, fontFamily: "system-ui, sans-serif",
+              }}>
+                <div style={{ flex: 1, height: 1, background: T.border }} />
+                YOKI
+                <div style={{ flex: 1, height: 1, background: T.border }} />
+              </div>
+
+              <button onClick={() => {
+                setGuestMode(true);
+                try { localStorage.setItem("jay-guest", "1"); } catch (e) {}
+              }} style={{
+                width: "100%", background: "transparent", border: "1px solid " + T.brd2,
+                color: T.text, borderRadius: 12, padding: "12px 0", fontSize: 14,
+                cursor: "pointer", fontFamily: "system-ui, sans-serif",
+              }}>Hisobsiz davom etish</button>
+
+              <div style={{
+                fontSize: 11.5, color: T.dim2, marginTop: 14, lineHeight: 1.5,
+                fontFamily: "system-ui, sans-serif",
+              }}>Kirsangiz — suhbatlaringiz saqlanadi va istalgan qurilmadan ochiladi.</div>
+            </div>
+
+            <a href="https://t.me/jayai_uz_bot" target="_blank" rel="noopener" style={{
+              display: "inline-block", marginTop: 22, color: T.dim,
+              fontSize: 13.5, fontFamily: "system-ui, sans-serif", textDecoration: "none",
+            }}>✈️ Telegram botda ham ishlaydi</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       height: "100vh", display: "flex",
-      background: "#0C0C0E", fontFamily: "Georgia, serif", color: "#EDEDED", overflow: "hidden",
+      background: T.bg, fontFamily: "Georgia, serif", color: T.text, overflow: "hidden",
     }}>
       {/* ===== Yon panel ===== */}
       {sideOpen && isMobile && (
@@ -766,7 +875,7 @@ export default function JayAI() {
       )}
       {sideOpen && (
         <div style={{
-          width: 250, flexShrink: 0, background: "#111114",
+          width: 250, flexShrink: 0, background: T.side,
           borderRight: "1px solid #26262B", display: "flex", flexDirection: "column",
           padding: "14px 10px",
           ...(isMobile ? {
@@ -784,15 +893,15 @@ export default function JayAI() {
             fontWeight: 600, justifyContent: "center", marginBottom: 10,
           }}>{L.newChat}</button>
 
-          <button onClick={() => setView("chat")} style={{ ...S.sideBtn, background: view === "chat" ? "#222228" : "transparent" }}>
+          <button onClick={() => setView("chat")} style={{ ...S.sideBtn, background: view === "chat" ? T.hover : "transparent" }}>
             {L.chats}
           </button>
-          <button onClick={() => setView("artifacts")} style={{ ...S.sideBtn, background: view === "artifacts" ? "#222228" : "transparent" }}>
+          <button onClick={() => setView("artifacts")} style={{ ...S.sideBtn, background: view === "artifacts" ? T.hover : "transparent" }}>
             📦 Artifacts {artifacts.length > 0 && <span style={{
               background: "#C41E24", borderRadius: 10, fontSize: 11, padding: "1px 7px", marginLeft: "auto",
             }}>{artifacts.length}</span>}
           </button>
-          <button onClick={() => setView("customize")} style={{ ...S.sideBtn, background: view === "customize" ? "#222228" : "transparent" }}>
+          <button onClick={() => setView("customize")} style={{ ...S.sideBtn, background: view === "customize" ? T.hover : "transparent" }}>
             {L.settings}
           </button>
           <button onClick={async () => {
@@ -804,13 +913,13 @@ export default function JayAI() {
               setSupUnread(false);
               markSupportRead(user.uid, "user");
             }
-          }} style={{ ...S.sideBtn, background: view === "support" ? "#222228" : "transparent" }}>
+          }} style={{ ...S.sideBtn, background: view === "support" ? T.hover : "transparent" }}>
             🆘 Yordam {supUnread && <span style={{
               width: 8, height: 8, borderRadius: "50%", background: "#E5484D", marginLeft: "auto",
             }} />}
           </button>
           <button onClick={() => { setView("favs"); if (isMobile) setSideOpen(false); }}
-            style={{ ...S.sideBtn, background: view === "favs" ? "#222228" : "transparent" }}>
+            style={{ ...S.sideBtn, background: view === "favs" ? T.hover : "transparent" }}>
             ⭐ Saqlanganlar
           </button>
           <a href="https://t.me/jayai_uz_bot" target="_blank" rel="noopener" style={{
@@ -818,7 +927,7 @@ export default function JayAI() {
           }}>✈️ Telegram bot</a>
           {user && user.email === ADMIN_EMAIL && (
             <button onClick={async () => { setView("admin"); setAdminUsers(await listUsers()); setAdminSup(await listSupport()); }}
-              style={{ ...S.sideBtn, background: view === "admin" ? "#222228" : "transparent" }}>
+              style={{ ...S.sideBtn, background: view === "admin" ? T.hover : "transparent" }}>
               {L.admin}
             </button>
           )}
@@ -833,7 +942,7 @@ export default function JayAI() {
           <input value={chatSearch} onChange={e => setChatSearch(e.target.value)}
             placeholder="🔍 Qidirish..."
             style={{
-              background: "#161618", color: "#EDEDED", border: "1px solid #26262B",
+              background: T.card, color: T.text, border: "1px solid " + T.border,
               borderRadius: 10, padding: "7px 12px", fontSize: 12.5, outline: "none",
               fontFamily: "system-ui, sans-serif", margin: "0 2px 8px",
             }} />
@@ -841,7 +950,7 @@ export default function JayAI() {
             {convs.filter(c => !chatSearch.trim() || c.title.toLowerCase().includes(chatSearch.trim().toLowerCase())).map(c => (
               <div key={c.id} onClick={() => { setCurId(c.id); setView("chat"); if (isMobile) setSideOpen(false); }} style={{
                 ...S.sideBtn,
-                background: c.id === cur?.id && view === "chat" ? "#222228" : "transparent",
+                background: c.id === cur?.id && view === "chat" ? T.hover : "transparent",
                 justifyContent: "space-between", marginBottom: 2,
               }}>
                 <span style={{
@@ -852,10 +961,10 @@ export default function JayAI() {
                   const nn = window.prompt("Yangi nom:", c.title);
                   if (nn && nn.trim()) setConvs(cs => cs.map(x => x.id === c.id ? { ...x, title: nn.trim().slice(0, 40) } : x));
                 }} style={{
-                  color: "#7A7A82", fontSize: 12, padding: "0 3px", cursor: "pointer",
+                  color: T.dim2, fontSize: 12, padding: "0 3px", cursor: "pointer",
                 }}>✎</span>
                 <span onClick={e => delChat(c.id, e)} style={{
-                  color: "#7A7A82", fontSize: 15, padding: "0 4px", cursor: "pointer",
+                  color: T.dim2, fontSize: 15, padding: "0 4px", cursor: "pointer",
                 }}>×</span>
               </div>
             ))}
@@ -881,12 +990,19 @@ export default function JayAI() {
                   }}>{user.displayName || user.email}</div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     {mePremium && <span style={{ fontSize: 11, color: "#F5C518" }}>💎 Premium</span>}
-                    <span onClick={logout} style={{ fontSize: 11, color: "#E5484D", cursor: "pointer" }}>{L.logout}</span>
+                    <span onClick={() => {
+                      try { localStorage.removeItem("jay-guest"); } catch (e) {}
+                      setGuestMode(false);
+                      logout();
+                    }} style={{ fontSize: 11, color: "#E5484D", cursor: "pointer" }}>{L.logout}</span>
                   </div>
                 </div>
               </div>
             ) : (
-              <button onClick={() => loginGoogle().catch(() => {})} style={{
+              <button onClick={() => {
+                setGuestMode(false);
+                try { localStorage.removeItem("jay-guest"); } catch (e) {}
+              }} style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                 width: "100%", background: "#FFF", color: "#1A1A1E", border: "none",
                 borderRadius: 10, padding: "9px 0", fontSize: 13.5, fontWeight: 600,
@@ -906,8 +1022,13 @@ export default function JayAI() {
           padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
           borderBottom: "1px solid #26262B",
         }}>
+          <button onClick={() => setTheme(t2 => t2 === "dark" ? "light" : "dark")}
+            title="Yorug'/qorong'i" style={{
+            background: "transparent", border: "1px solid " + T.brd2, color: T.text,
+            borderRadius: 8, padding: "5px 10px", fontSize: 14, cursor: "pointer", marginRight: 6,
+          }}>{theme === "dark" ? "☀️" : "🌙"}</button>
           <button onClick={() => setSideOpen(o => !o)} style={{
-            background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
+            background: "transparent", border: "1px solid " + T.brd2, color: T.text,
             borderRadius: 8, padding: "5px 11px", fontSize: 15, cursor: "pointer",
           }}>☰</button>
           <span title="Ketma-ket kunlar" style={{
@@ -929,21 +1050,21 @@ export default function JayAI() {
               a.click();
               URL.revokeObjectURL(a.href);
             }} title="Yuklab olish" style={{
-              background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
+              background: "transparent", border: "1px solid " + T.brd2, color: T.text,
               borderRadius: 8, padding: "5px 10px", fontSize: 13, cursor: "pointer",
               fontFamily: "system-ui, sans-serif", marginRight: 6,
             }}>📥</button>
           )}
           {view === "chat" && msgs.length > 0 && (
             <button onClick={shareChat} title="Suhbatni ulashish" style={{
-              background: "transparent", border: "1px solid #3A3A40", color: "#D9D9DE",
+              background: "transparent", border: "1px solid " + T.brd2, color: T.text,
               borderRadius: 8, padding: "5px 12px", fontSize: 13, cursor: "pointer",
               fontFamily: "system-ui, sans-serif",
             }}>{L.share}</button>
           )}
           {view === "chat" && cur?.mode && cur.mode !== "chat" && (
             <span style={{
-              background: "#222228", border: "1px solid #3A3A40", borderRadius: 8,
+              background: T.hover, border: "1px solid " + T.brd2, borderRadius: 8,
               fontSize: 11, padding: "3px 10px", color: "#E5484D",
               fontFamily: "system-ui, sans-serif", fontWeight: 600,
             }}>{MODES[cur.mode].label} rejimi</span>
@@ -955,7 +1076,7 @@ export default function JayAI() {
           <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
             <div style={{ maxWidth: 760, margin: "0 auto" }}>
               {artifacts.length === 0 ? (
-                <div style={{ textAlign: "center", marginTop: 80, color: "#8F8F8F", fontFamily: "system-ui, sans-serif" }}>
+                <div style={{ textAlign: "center", marginTop: 80, color: T.dim, fontFamily: "system-ui, sans-serif" }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
                   Hali artifactlar yo'q.<br />JAY sayt yasaganda, hammasi shu yerda to'planadi.
                 </div>
@@ -963,7 +1084,7 @@ export default function JayAI() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
                   {artifacts.map((a, i) => (
                     <div key={i} style={{
-                      background: "#161618", border: "1px solid #26262B", borderRadius: 14,
+                      background: T.card, border: "1px solid " + T.border, borderRadius: 14,
                       padding: 16, fontFamily: "system-ui, sans-serif",
                     }}>
                       <div style={{ fontSize: 26, marginBottom: 8 }}>🌐</div>
@@ -971,7 +1092,7 @@ export default function JayAI() {
                         fontSize: 13, fontWeight: 600, marginBottom: 4,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>{a.chat}</div>
-                      <div style={{ fontSize: 11, color: "#8F8F8F", marginBottom: 12 }}>HTML sayt</div>
+                      <div style={{ fontSize: 11, color: T.dim, marginBottom: 12 }}>HTML sayt</div>
                       <button onClick={() => setPreview(a.code)} style={{
                         background: "#C41E24", color: "#FFF", border: "none", width: "100%",
                         borderRadius: 9, padding: "8px 0", fontSize: 13, cursor: "pointer", fontWeight: 600,
@@ -988,30 +1109,30 @@ export default function JayAI() {
         {view === "customize" && (
           <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
             <div style={{ maxWidth: 520, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
-              <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>{L.langLabel}</div>
+              <div style={{ fontSize: 13, color: T.dim, marginBottom: 6 }}>{L.langLabel}</div>
               <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
                 {[["uz", "O'zbekcha"], ["ru", "Русский"], ["en", "English"]].map(([code, label]) => (
                   <button key={code} onClick={() => setSettings(st => ({ ...st, lang: code }))} style={{
                     flex: 1, padding: "10px 0", borderRadius: 12, cursor: "pointer",
                     fontFamily: "system-ui, sans-serif", fontSize: 13.5, fontWeight: 600,
-                    background: (settings.lang || "uz") === code ? "#C41E24" : "#161618",
-                    border: "1px solid " + ((settings.lang || "uz") === code ? "#C41E24" : "#3A3A40"),
-                    color: (settings.lang || "uz") === code ? "#FFF" : "#D9D9DE",
+                    background: (settings.lang || "uz") === code ? "#C41E24" : T.card,
+                    border: "1px solid " + ((settings.lang || "uz") === code ? "#C41E24" : T.brd2),
+                    color: (settings.lang || "uz") === code ? "#FFF" : T.text,
                   }}>{label}</button>
                 ))}
               </div>
               <div style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
-                background: "#161618", border: "1px solid #26262B", borderRadius: 12,
+                background: T.card, border: "1px solid " + T.border, borderRadius: 12,
                 padding: "12px 14px", marginBottom: 20,
               }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>🗣 Avtomatik ovoz</div>
-                  <div style={{ fontSize: 11.5, color: "#9A9AA2" }}>JAY javoblarini o'zi ovozda o'qib bersin</div>
+                  <div style={{ fontSize: 11.5, color: T.dim }}>JAY javoblarini o'zi ovozda o'qib bersin</div>
                 </div>
                 <div onClick={() => setAutoVoice(v => !v)} style={{
                   width: 46, height: 26, borderRadius: 13, cursor: "pointer",
-                  background: autoVoice ? "#C41E24" : "#3A3A40", position: "relative", transition: "0.2s",
+                  background: autoVoice ? "#C41E24" : T.brd2, position: "relative", transition: "0.2s",
                 }}>
                   <div style={{
                     width: 20, height: 20, borderRadius: "50%", background: "#FFF",
@@ -1026,23 +1147,23 @@ export default function JayAI() {
                 return (
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-                      <div style={{ flex: 1, background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 12 }}>
+                      <div style={{ flex: 1, background: T.card, border: "1px solid " + T.border, borderRadius: 12, padding: 12 }}>
                         <div style={{ fontSize: 22, fontWeight: 700, color: "#E5484D" }}>{myMsgs}</div>
-                        <div style={{ fontSize: 11, color: "#9A9AA2" }}>Yuborilgan xabar</div>
+                        <div style={{ fontSize: 11, color: T.dim }}>Yuborilgan xabar</div>
                       </div>
-                      <div style={{ flex: 1, background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 12 }}>
+                      <div style={{ flex: 1, background: T.card, border: "1px solid " + T.border, borderRadius: 12, padding: 12 }}>
                         <div style={{ fontSize: 22, fontWeight: 700, color: "#E5484D" }}>{convs.length}</div>
-                        <div style={{ fontSize: 11, color: "#9A9AA2" }}>Suhbatlar</div>
+                        <div style={{ fontSize: 11, color: T.dim }}>Suhbatlar</div>
                       </div>
-                      <div style={{ flex: 1, background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 12 }}>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: mePremium ? "#F5C518" : "#9A9AA2" }}>{mePremium ? "💎" : "—"}</div>
-                        <div style={{ fontSize: 11, color: "#9A9AA2" }}>Premium</div>
+                      <div style={{ flex: 1, background: T.card, border: "1px solid " + T.border, borderRadius: 12, padding: 12 }}>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: mePremium ? "#F5C518" : T.dim }}>{mePremium ? "💎" : "—"}</div>
+                        <div style={{ fontSize: 11, color: T.dim }}>Premium</div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>🎁 Do'stni taklif qiling</div>
+                    <div style={{ fontSize: 13, color: T.dim, marginBottom: 6 }}>🎁 Do'stni taklif qiling</div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <input readOnly value={refLink} style={{
-                        flex: 1, background: "#161618", color: "#9A9AA2", border: "1px solid #3A3A40",
+                        flex: 1, background: T.card, color: T.dim, border: "1px solid " + T.brd2,
                         borderRadius: 10, padding: "9px 12px", fontSize: 12, fontFamily: "system-ui, sans-serif",
                       }} />
                       <button onClick={() => copyText(refLink)} style={{
@@ -1054,12 +1175,12 @@ export default function JayAI() {
                 );
               })()}
 
-              <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>{L.nameLabel}</div>
+              <div style={{ fontSize: 13, color: T.dim, marginBottom: 6 }}>{L.nameLabel}</div>
               <input value={settings.name}
                 onChange={e => setSettings(s => ({ ...s, name: e.target.value }))}
                 style={{ ...S.inp, marginBottom: 20 }} placeholder="Ismingiz" />
 
-              <div style={{ fontSize: 13, color: "#9A9AA2", marginBottom: 6 }}>
+              <div style={{ fontSize: 13, color: T.dim, marginBottom: 6 }}>
                 {L.extraLabel}
               </div>
               <textarea value={settings.extra}
@@ -1067,8 +1188,26 @@ export default function JayAI() {
                 rows={5}
                 style={{ ...S.inp, resize: "vertical" }}
                 placeholder={L.extraPh} />
-              <div style={{ fontSize: 12, color: "#7A7A82", marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: T.dim2, marginTop: 10 }}>
                 {L.saveNote}
+              </div>
+
+              <div style={{
+                marginTop: 24, paddingTop: 18, borderTop: "1px solid " + T.border,
+              }}>
+                <div style={{ fontSize: 13, color: T.dim, marginBottom: 8 }}>🧹 Tozalash</div>
+                <button onClick={() => {
+                  if (window.confirm("Barcha suhbatlar o'chirilsinmi? Bu amalni qaytarib bo'lmaydi!")) {
+                    const fresh = newConv();
+                    setConvs([fresh]);
+                    setCurId(fresh.id);
+                    setView("chat");
+                  }
+                }} style={{
+                  background: "transparent", border: "1px solid #C41E24", color: "#E5484D",
+                  borderRadius: 12, padding: "10px 18px", fontSize: 13.5, cursor: "pointer",
+                  fontWeight: 600, fontFamily: "system-ui, sans-serif",
+                }}>🗑 Barcha chatlarni o'chirish</button>
               </div>
             </div>
           </div>
@@ -1084,13 +1223,13 @@ export default function JayAI() {
             <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? 14 : 24 }}>
               <div style={{ maxWidth: 720, margin: "0 auto" }}>
                 {favs.length === 0 ? (
-                  <div style={{ textAlign: "center", marginTop: 60, color: "#8F8F8F", fontFamily: "system-ui, sans-serif" }}>
+                  <div style={{ textAlign: "center", marginTop: 60, color: T.dim, fontFamily: "system-ui, sans-serif" }}>
                     <div style={{ fontSize: 40, marginBottom: 10 }}>⭐</div>
                     Hali saqlangan javoblar yo'q.<br/>Yoqqan javob ostidagi ☆ ni bosing.
                   </div>
                 ) : favs.map((f, i) => (
                   <div key={i} style={{
-                    background: "#161618", border: "1px solid #26262B", borderRadius: 14,
+                    background: T.card, border: "1px solid " + T.border, borderRadius: 14,
                     padding: 16, marginBottom: 12,
                   }}>
                     <div style={{ fontSize: 11, color: "#F5C518", marginBottom: 8, fontFamily: "system-ui, sans-serif" }}>
@@ -1098,8 +1237,8 @@ export default function JayAI() {
                     </div>
                     <div style={{ fontSize: 14.5, lineHeight: 1.6 }}><Md text={f.content} /></div>
                     <button onClick={() => copyText(f.content)} style={{
-                      marginTop: 10, background: "transparent", border: "1px solid #3A3A40",
-                      color: "#9A9AA2", borderRadius: 8, padding: "5px 14px", fontSize: 12, cursor: "pointer",
+                      marginTop: 10, background: "transparent", border: "1px solid " + T.brd2,
+                      color: T.dim, borderRadius: 8, padding: "5px 14px", fontSize: 12, cursor: "pointer",
                       fontFamily: "system-ui, sans-serif",
                     }}>📋 Nusxalash</button>
                   </div>
@@ -1115,14 +1254,14 @@ export default function JayAI() {
             <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? 12 : 24 }}>
               <div style={{ maxWidth: 640, margin: "0 auto", fontFamily: "system-ui, sans-serif" }}>
                 {!user ? (
-                  <div style={{ textAlign: "center", marginTop: 60, color: "#9A9AA2" }}>
+                  <div style={{ textAlign: "center", marginTop: 60, color: T.dim }}>
                     Yordam bo'limidan foydalanish uchun avval Google bilan kiring.
                   </div>
                 ) : (
                   <>
                     <div style={{
-                      background: "#161618", border: "1px solid #26262B", borderRadius: 12,
-                      padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#9A9AA2",
+                      background: T.card, border: "1px solid " + T.border, borderRadius: 12,
+                      padding: "10px 14px", marginBottom: 16, fontSize: 13, color: T.dim,
                     }}>
                       Savol yoki muammoingizni yozing — administrator tez orada javob beradi.
                     </div>
@@ -1135,9 +1274,9 @@ export default function JayAI() {
                           maxWidth: "80%", padding: "10px 14px", fontSize: 14, lineHeight: 1.5,
                           whiteSpace: "pre-wrap", wordBreak: "break-word",
                           borderRadius: m.from === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-                          background: m.from === "user" ? "#C41E24" : "#161618",
+                          background: m.from === "user" ? "#C41E24" : T.card,
                           border: m.from === "user" ? "none" : "1px solid #26262B",
-                          color: "#EDEDED",
+                          color: T.text,
                         }}>
                           {m.from === "admin" && <div style={{ fontSize: 10, color: "#E5484D", fontWeight: 700, marginBottom: 3 }}>👑 ADMIN</div>}
                           {m.text}
@@ -1152,19 +1291,19 @@ export default function JayAI() {
               <div style={{ padding: "10px 14px 16px" }}>
                 <div style={{
                   maxWidth: 640, margin: "0 auto", display: "flex", gap: 8,
-                  background: "#161618", border: "1px solid #26262B", borderRadius: 14, padding: 6,
+                  background: T.card, border: "1px solid " + T.border, borderRadius: 14, padding: 6,
                 }}>
                   <textarea value={supInput} onChange={e => setSupInput(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSup(); } }}
                     placeholder="Xabar yozing..." rows={1}
                     style={{
-                      flex: 1, resize: "none", background: "transparent", color: "#EDEDED",
+                      flex: 1, resize: "none", background: "transparent", color: T.text,
                       border: "none", padding: "9px 10px", fontSize: 14, outline: "none",
                       fontFamily: "system-ui, sans-serif",
                     }} />
                   <button onClick={sendSup} disabled={!supInput.trim()} style={{
-                    background: supInput.trim() ? "#C41E24" : "#1E1E20",
-                    color: supInput.trim() ? "#FFF" : "#5A5A5A",
+                    background: supInput.trim() ? "#C41E24" : T.hover,
+                    color: supInput.trim() ? "#FFF" : T.dim2,
                     border: "none", borderRadius: 10, padding: "0 16px", fontWeight: 600,
                     fontSize: 13, cursor: "pointer", fontFamily: "system-ui, sans-serif",
                   }}>➤</button>
@@ -1226,39 +1365,39 @@ export default function JayAI() {
                   ["Jami xabarlar", adminUsers.reduce((n, u) => n + u.msgs, 0)],
                 ].map(([t, v]) => (
                   <div key={t} style={{
-                    flex: 1, minWidth: 120, background: "#161618", border: "1px solid #26262B",
+                    flex: 1, minWidth: 120, background: T.card, border: "1px solid " + T.border,
                     borderRadius: 12, padding: 12,
                   }}>
                     <div style={{ fontSize: 22, fontWeight: 700, color: "#E5484D" }}>{v}</div>
-                    <div style={{ fontSize: 11, color: "#9A9AA2" }}>{t}</div>
+                    <div style={{ fontSize: 11, color: T.dim }}>{t}</div>
                   </div>
                 ))}
               </div>
 
               {/* O'sish grafigi */}
-              <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: "#9A9AA2", marginBottom: 10 }}>📈 Yangi foydalanuvchilar (14 kun)</div>
+              <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: T.dim, marginBottom: 10 }}>📈 Yangi foydalanuvchilar (14 kun)</div>
                 <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 70 }}>
                   {days.map((d, i) => (
                     <div key={i} style={{ flex: 1, textAlign: "center" }}>
                       <div title={d.n} style={{
-                        height: Math.max(3, (d.n / maxN) * 55), background: d.n ? "#C41E24" : "#26262B",
+                        height: Math.max(3, (d.n / maxN) * 55), background: d.n ? "#C41E24" : T.border,
                         borderRadius: 3,
                       }} />
-                      <div style={{ fontSize: 8, color: "#7A7A82", marginTop: 3 }}>{d.label}</div>
+                      <div style={{ fontSize: 8, color: T.dim2, marginTop: 3 }}>{d.label}</div>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* E'lon yuborish */}
-              <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-                <div style={{ fontSize: 12, color: "#9A9AA2", marginBottom: 8 }}>📢 Barcha foydalanuvchilarga e'lon</div>
+              <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: T.dim, marginBottom: 8 }}>📢 Barcha foydalanuvchilarga e'lon</div>
                 <textarea value={annDraft} onChange={e => setAnnDraft(e.target.value)} rows={2}
                   placeholder={ann?.text ? "Joriy e'lon: " + ann.text : "E'lon matni..."}
                   style={{
-                    width: "100%", boxSizing: "border-box", background: "#0C0C0E", color: "#EDEDED",
-                    border: "1px solid #3A3A40", borderRadius: 10, padding: 10, fontSize: 13,
+                    width: "100%", boxSizing: "border-box", background: T.bg, color: T.text,
+                    border: "1px solid " + T.brd2, borderRadius: 10, padding: 10, fontSize: 13,
                     fontFamily: "system-ui, sans-serif", resize: "vertical",
                   }} />
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -1274,7 +1413,7 @@ export default function JayAI() {
                   }}>Yuborish</button>
                   {ann?.text && (
                     <button onClick={async () => { await setAnnouncement(""); setAnn(null); }} style={{
-                      background: "transparent", color: "#9A9AA2", border: "1px solid #3A3A40",
+                      background: "transparent", color: T.dim, border: "1px solid " + T.brd2,
                       borderRadius: 8, padding: "7px 16px", fontSize: 12.5, cursor: "pointer",
                     }}>E'lonni o'chirish</button>
                   )}
@@ -1282,9 +1421,9 @@ export default function JayAI() {
               </div>
 
               {/* Support murojaatlari */}
-              <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+              <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 12, padding: 14, marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: "#9A9AA2", flex: 1 }}>
+                  <div style={{ fontSize: 12, color: T.dim, flex: 1 }}>
                     🆘 Yordam murojaatlari
                     {adminSup.filter(t => t.unreadAdmin).length > 0 && (
                       <span style={{
@@ -1294,14 +1433,14 @@ export default function JayAI() {
                     )}
                   </div>
                   <button onClick={async () => setAdminSup(await listSupport())} style={{
-                    background: "#222228", border: "1px solid #3A3A40", color: "#D9D9DE",
+                    background: T.hover, border: "1px solid " + T.brd2, color: T.text,
                     borderRadius: 8, padding: "4px 12px", fontSize: 11.5, cursor: "pointer",
                   }}>🔄 Yangilash</button>
                 </div>
-                {adminSup.length === 0 && <div style={{ fontSize: 12, color: "#8F8F8F" }}>Murojaatlar yo'q — "Yangilash"ni bosing</div>}
+                {adminSup.length === 0 && <div style={{ fontSize: 12, color: T.dim }}>Murojaatlar yo'q — "Yangilash"ni bosing</div>}
                 {adminSup.map(t => (
                   <div key={t.uid} style={{
-                    border: "1px solid " + (t.unreadAdmin ? "#C41E24" : "#26262B"),
+                    border: "1px solid " + (t.unreadAdmin ? "#C41E24" : T.border),
                     borderRadius: 10, padding: "8px 12px", marginBottom: 6,
                   }}>
                     <div onClick={async () => {
@@ -1314,11 +1453,11 @@ export default function JayAI() {
                     }} style={{ cursor: "pointer", display: "flex", gap: 8, alignItems: "center" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <b style={{ fontSize: 13 }}>{t.unreadAdmin && "🔴 "}{t.name || t.email}</b>
-                        <div style={{ fontSize: 11.5, color: "#9A9AA2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontSize: 11.5, color: T.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {(t.msgs || []).slice(-1)[0]?.text || ""}
                         </div>
                       </div>
-                      <span style={{ fontSize: 10, color: "#7A7A82" }}>
+                      <span style={{ fontSize: 10, color: T.dim2 }}>
                         {t.updated ? new Date(t.updated).toLocaleString().slice(0, 17) : ""}
                       </span>
                     </div>
@@ -1342,10 +1481,10 @@ export default function JayAI() {
 
               {/* So'nggi xabarlar */}
               {feed.length > 0 && (
-                <div style={{ background: "#161618", border: "1px solid #26262B", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, color: "#9A9AA2", marginBottom: 8 }}>💬 So'nggi xabarlar</div>
+                <div style={{ background: T.card, border: "1px solid " + T.border, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, color: T.dim, marginBottom: 8 }}>💬 So'nggi xabarlar</div>
                   {feed.map((f, i) => (
-                    <div key={i} style={{ fontSize: 12.5, marginBottom: 6, color: "#D9D9DE" }}>
+                    <div key={i} style={{ fontSize: 12.5, marginBottom: 6, color: T.text }}>
                       <b style={{ color: "#E5484D" }}>{f.name}:</b> {(f.text || "").slice(0, 120)}
                     </div>
                   ))}
@@ -1357,15 +1496,15 @@ export default function JayAI() {
                 <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)}
                   placeholder="🔍 Ism yoki email bo'yicha qidirish..."
                   style={{
-                    flex: 1, minWidth: 180, background: "#161618", color: "#EDEDED",
-                    border: "1px solid #3A3A40", borderRadius: 10, padding: "9px 12px",
+                    flex: 1, minWidth: 180, background: T.card, color: T.text,
+                    border: "1px solid " + T.brd2, borderRadius: 10, padding: "9px 12px",
                     fontSize: 13, outline: "none", fontFamily: "system-ui, sans-serif",
                   }} />
                 {[["updated", "Faollik"], ["msgs", "Xabarlar"], ["created", "Yangilar"]].map(([k, lbl]) => (
                   <button key={k} onClick={() => setAdminSort(k)} style={{
-                    background: adminSort === k ? "#C41E24" : "#161618",
-                    border: "1px solid " + (adminSort === k ? "#C41E24" : "#3A3A40"),
-                    color: adminSort === k ? "#FFF" : "#D9D9DE",
+                    background: adminSort === k ? "#C41E24" : T.card,
+                    border: "1px solid " + (adminSort === k ? "#C41E24" : T.brd2),
+                    color: adminSort === k ? "#FFF" : T.text,
                     borderRadius: 10, padding: "0 14px", fontSize: 12.5, cursor: "pointer",
                   }}>{lbl}</button>
                 ))}
@@ -1374,7 +1513,7 @@ export default function JayAI() {
               {/* Foydalanuvchilar ro'yxati */}
               {list.map(u => (
                 <div key={u.uid} style={{
-                  background: "#161618", border: "1px solid " + (u.blocked ? "#C41E24" : "#26262B"),
+                  background: T.card, border: "1px solid " + (u.blocked ? "#C41E24" : T.border),
                   borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontSize: 13,
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -1382,9 +1521,9 @@ export default function JayAI() {
                       <div style={{ fontWeight: 600 }}>
                         {u.premium && "💎 "}{u.name || "Nomsiz"} {u.blocked && <span style={{ color: "#E5484D", fontSize: 11 }}>⛔</span>}
                       </div>
-                      <div style={{ color: "#9A9AA2", fontSize: 12 }}>{u.email}</div>
+                      <div style={{ color: T.dim, fontSize: 12 }}>{u.email}</div>
                     </div>
-                    <div style={{ color: "#9A9AA2", fontSize: 11 }}>{u.chats}ch · {u.msgs}xb</div>
+                    <div style={{ color: T.dim, fontSize: 11 }}>{u.chats}ch · {u.msgs}xb</div>
                     <input type="number" min="0" defaultValue={u.adminLimit || ""}
                       title="Kunlik limit (0 = cheksiz)" placeholder="∞"
                       onBlur={async e => {
@@ -1392,18 +1531,18 @@ export default function JayAI() {
                         if (v !== u.adminLimit) { await setUserField(u.uid, { adminLimit: v }); setAdminUsers(await listUsers()); }
                       }}
                       style={{
-                        width: 46, background: "#0C0C0E", color: "#EDEDED", textAlign: "center",
-                        border: "1px solid #3A3A40", borderRadius: 8, padding: "5px 4px", fontSize: 12,
+                        width: 46, background: T.bg, color: T.text, textAlign: "center",
+                        border: "1px solid " + T.brd2, borderRadius: 8, padding: "5px 4px", fontSize: 12,
                       }} />
                     <button onClick={async () => {
                       await setUserField(u.uid, { premium: !u.premium });
                       setAdminUsers(await listUsers());
                     }} title="Premium berish/olish" style={{
-                      background: u.premium ? "#5C4A00" : "#222228", border: "1px solid #3A3A40",
+                      background: u.premium ? "#5C4A00" : T.hover, border: "1px solid " + T.brd2,
                       color: "#F5C518", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer",
                     }}>💎</button>
                     <button onClick={() => setViewUser(viewUser?.uid === u.uid ? null : u)} style={{
-                      background: "#222228", border: "1px solid #3A3A40", color: "#D9D9DE",
+                      background: T.hover, border: "1px solid " + T.brd2, color: T.text,
                       borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer",
                     }}>👁</button>
                     <button onClick={async () => {
@@ -1429,7 +1568,7 @@ export default function JayAI() {
                     try { chats = JSON.parse(u.data).list || []; } catch (e) {}
                     return (
                       <div style={{ marginTop: 12, borderTop: "1px solid #26262B", paddingTop: 10 }}>
-                        {chats.length === 0 && <div style={{ color: "#8F8F8F", fontSize: 12 }}>Suhbatlar yo'q</div>}
+                        {chats.length === 0 && <div style={{ color: T.dim, fontSize: 12 }}>Suhbatlar yo'q</div>}
                         {chats.map((c, ci) => (
                           <details key={ci} style={{ marginBottom: 8 }}>
                             <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#E5484D" }}>
@@ -1438,7 +1577,7 @@ export default function JayAI() {
                             <div style={{ padding: "8px 0 0 14px" }}>
                               {(c.msgs || []).map((m, mi) => (
                                 <div key={mi} style={{
-                                  fontSize: 12, marginBottom: 6, color: m.role === "user" ? "#FFF" : "#9A9AA2",
+                                  fontSize: 12, marginBottom: 6, color: m.role === "user" ? "#FFF" : T.dim,
                                   whiteSpace: "pre-wrap", wordBreak: "break-word",
                                 }}>
                                   <b>{m.role === "user" ? "👤" : "🤖"}</b> {(m.content || "").slice(0, 500)}
@@ -1453,7 +1592,7 @@ export default function JayAI() {
                 </div>
               ))}
               {list.length === 0 && (
-                <div style={{ color: "#8F8F8F", textAlign: "center", marginTop: 30 }}>
+                <div style={{ color: T.dim, textAlign: "center", marginTop: 30 }}>
                   Hech narsa topilmadi
                 </div>
               )}
@@ -1493,7 +1632,7 @@ export default function JayAI() {
                       <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginTop: 18, marginBottom: -6 }}>
                         {[["Realistik", "realistic photo"], ["Anime", "anime style"], ["3D", "3d render"], ["Rasm", "digital painting"], ["Logo", "minimalist logo"]].map(([lbl, tag]) => (
                           <button key={lbl} onClick={() => setInput(prev => (prev ? prev + ", " : "") + tag)} style={{
-                            background: "#161618", border: "1px solid #3A3A40", color: "#D9D9DE",
+                            background: T.card, border: "1px solid " + T.brd2, color: T.text,
                             borderRadius: 16, padding: "6px 12px", fontSize: 12, cursor: "pointer",
                             fontFamily: "system-ui, sans-serif",
                           }}>{lbl}</button>
@@ -1525,9 +1664,9 @@ export default function JayAI() {
                             }
                           }}
                           style={{
-                            background: cur?.mode === mode ? "#C41E24" : "#161618",
-                            border: "1px solid " + (cur?.mode === mode ? "#C41E24" : "#3A3A40"),
-                            color: cur?.mode === mode ? "#FFF" : "#D9D9DE",
+                            background: cur?.mode === mode ? "#C41E24" : T.card,
+                            border: "1px solid " + (cur?.mode === mode ? "#C41E24" : T.brd2),
+                            color: cur?.mode === mode ? "#FFF" : T.text,
                             borderRadius: 20, padding: "9px 16px", fontSize: 13, cursor: "pointer",
                             fontWeight: 500,
                           }}>{label}</button>
@@ -1548,9 +1687,9 @@ export default function JayAI() {
                       maxWidth: m.role === "user" ? "80%" : "88%", padding: "12px 16px",
                       fontSize: 15, lineHeight: 1.6, wordBreak: "break-word",
                       borderRadius: m.role === "user" ? "18px 18px 6px 18px" : "18px 18px 18px 6px",
-                      background: m.role === "user" ? "#C41E24" : "#161618",
+                      background: m.role === "user" ? "#C41E24" : T.card,
                       border: m.role === "user" ? "none" : "1px solid #26262B",
-                      color: m.role === "user" ? "#FFF" : "#EDEDED",
+                      color: m.role === "user" ? "#FFF" : T.text,
                       fontFamily: m.role === "user" ? "system-ui, sans-serif" : "Georgia, serif",
                     }}>
                       {m.role === "user"
@@ -1585,20 +1724,20 @@ export default function JayAI() {
                           )}
                           <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
                             <button onClick={() => speak(m.content)} title="Ovozda eshitish" style={{
-                              background: "transparent", border: "none", color: "#7A7A82", cursor: "pointer", fontSize: 14,
+                              background: "transparent", border: "none", color: T.dim2, cursor: "pointer", fontSize: 14,
                             }}>🔊</button>
                             <button onClick={() => copyText(m.content)} title="Nusxalash" style={{
-                              background: "transparent", border: "none", color: "#7A7A82", cursor: "pointer", fontSize: 14,
+                              background: "transparent", border: "none", color: T.dim2, cursor: "pointer", fontSize: 14,
                             }}>📋</button>
                             <button onClick={() => {
                               updateCur(c => ({ ...c, msgs: c.msgs.map((x, xi) => xi === i ? { ...x, fav: !x.fav } : x) }));
                             }} title="Saqlash" style={{
                               background: "transparent", border: "none",
-                              color: m.fav ? "#F5C518" : "#7A7A82", cursor: "pointer", fontSize: 14,
+                              color: m.fav ? "#F5C518" : T.dim2, cursor: "pointer", fontSize: 14,
                             }}>{m.fav ? "★" : "☆"}</button>
                             {i === msgs.length - 1 && (
                               <button onClick={regenerate} title="Qayta yaratish" style={{
-                                background: "transparent", border: "none", color: "#7A7A82", cursor: "pointer", fontSize: 14,
+                                background: "transparent", border: "none", color: T.dim2, cursor: "pointer", fontSize: 14,
                               }}>🔄</button>
                             )}
                           </div>
@@ -1635,7 +1774,7 @@ export default function JayAI() {
           zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
         }}>
           <div style={{
-            background: "#161618", borderRadius: 16, width: "100%", maxWidth: 920,
+            background: T.card, borderRadius: 16, width: "100%", maxWidth: 920,
             height: "85vh", display: "flex", flexDirection: "column", overflow: "hidden",
           }}>
             <div style={{
