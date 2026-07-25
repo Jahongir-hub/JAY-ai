@@ -336,6 +336,18 @@ export default async function handler(req, res) {
     if (msg.contact && msg.contact.phone_number) {
       await saveTgUser(chatId, { phone: msg.contact.phone_number, step: "done" });
       await tg("sendMessage", { chat_id: chatId, text: t.doneReg, reply_markup: KB });
+      // Adminga yangi foydalanuvchi haqida xabar
+      if (ADMIN && String(chatId) !== String(ADMIN)) {
+        const uname = msg.from?.username ? "@" + msg.from.username : "—";
+        await tg("sendMessage", {
+          chat_id: ADMIN,
+          text: "🎉 YANGI FOYDALANUVCHI\n\n👤 " + (u0?.name || msg.from?.first_name || "—") +
+            "\n📱 " + msg.contact.phone_number +
+            "\n🔗 " + uname +
+            "\n🌍 " + lang +
+            "\n🆔 #u" + chatId,
+        });
+      }
       return res.status(200).json({ ok: true });
     }
 
