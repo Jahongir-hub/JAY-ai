@@ -239,6 +239,7 @@ const LANGS = {
     greet: (h) => h < 5 ? "Xayrli tun" : h < 11 ? "Xayrli tong" : h < 18 ? "Xayrli kun" : h < 23 ? "Xayrli kech" : "Xayrli tun",
     ttsLang: "uz-UZ",
     sysLang: "Interfeys tili: o'zbekcha. Asosan o'zbek tilida javob ber.",
+    suggestions: ["✍️ Menga she'r yoz", "🐍 Python o'rgat", "🌍 Ingliz tiliga tarjima", "💡 Biznes g'oya ber"],
   },
   ru: {
     newChat: "+ Новый чат", chats: "💬 Чаты", settings: "⚙️ Настройки", admin: "🛠 Админ",
@@ -252,6 +253,7 @@ const LANGS = {
     greet: (h) => h < 5 ? "Доброй ночи" : h < 11 ? "Доброе утро" : h < 18 ? "Добрый день" : h < 23 ? "Добрый вечер" : "Доброй ночи",
     ttsLang: "ru-RU",
     sysLang: "Язык интерфейса: русский. Отвечай в основном на русском языке.",
+    suggestions: ["✍️ Напиши стихотворение", "🐍 Обучи Python", "🌍 Перевод на английский", "💡 Идея для бизнеса"],
   },
   en: {
     newChat: "+ New chat", chats: "💬 Chats", settings: "⚙️ Settings", admin: "🛠 Admin",
@@ -265,6 +267,7 @@ const LANGS = {
     greet: (h) => h < 5 ? "Good night" : h < 11 ? "Good morning" : h < 18 ? "Good afternoon" : h < 23 ? "Good evening" : "Good night",
     ttsLang: "en-US",
     sysLang: "Interface language: English. Reply mainly in English.",
+    suggestions: ["✍️ Write me a poem", "🐍 Teach me Python", "🌍 Translate to Uzbek", "💡 Give a business idea"],
   },
 };
 
@@ -947,7 +950,7 @@ export default function JayAI() {
               fontFamily: "system-ui, sans-serif", margin: "0 2px 8px",
             }} />
           <div style={{ flex: 1, overflowY: "auto" }}>
-            {convs.filter(c => !chatSearch.trim() || c.title.toLowerCase().includes(chatSearch.trim().toLowerCase())).map(c => (
+            {[...convs].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)).filter(c => !chatSearch.trim() || c.title.toLowerCase().includes(chatSearch.trim().toLowerCase())).map(c => (
               <div key={c.id} onClick={() => { setCurId(c.id); setView("chat"); if (isMobile) setSideOpen(false); }} style={{
                 ...S.sideBtn,
                 background: c.id === cur?.id && view === "chat" ? T.hover : "transparent",
@@ -956,6 +959,12 @@ export default function JayAI() {
                 <span style={{
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontSize: 13.5,
                 }}>{c.mode === "code" ? "‹› " : c.mode === "design" ? "🎨 " : ""}{c.title}</span>
+                <span onClick={e => {
+                  e.stopPropagation();
+                  setConvs(cs => cs.map(x => x.id === c.id ? { ...x, pinned: !x.pinned } : x));
+                }} style={{
+                  color: c.pinned ? "#F5C518" : T.dim2, fontSize: 12, padding: "0 3px", cursor: "pointer",
+                }} title="Qadab qo'yish">📌</span>
                 <span onClick={e => {
                   e.stopPropagation();
                   const nn = window.prompt("Yangi nom:", c.title);
@@ -1640,6 +1649,17 @@ export default function JayAI() {
                       </div>
                     )}
                     <div style={{ marginTop: 28, textAlign: "left" }}>{inputBar}</div>
+                    {(!cur?.mode || cur?.mode === "chat") && (
+                      <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 16 }}>
+                        {(L.suggestions || []).map((sug, si) => (
+                          <button key={si} onClick={() => setInput(sug)} style={{
+                            background: T.card, border: "1px solid " + T.border, color: T.dim,
+                            borderRadius: 16, padding: "8px 14px", fontSize: 12.5, cursor: "pointer",
+                            fontFamily: "system-ui, sans-serif",
+                          }}>{sug}</button>
+                        ))}
+                      </div>
+                    )}
                     <div style={{
                       display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap",
                       marginTop: 18, fontFamily: "system-ui, sans-serif",
