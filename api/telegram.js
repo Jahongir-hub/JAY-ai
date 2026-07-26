@@ -95,8 +95,13 @@ function keyboardFor(lang) {
 
 
 
-async function askGemini(userText, lang) {
+async function askGemini(userText, lang, history) {
   const SYSTEM = SYS_BY_LANG[lang] || SYS_BY_LANG.uz;
+  const contents = [];
+  for (const h of (history || []).slice(-10)) {
+    contents.push({ role: h.role === "assistant" ? "model" : "user", parts: [{ text: h.text }] });
+  }
+  contents.push({ role: "user", parts: [{ text: userText }] });
   for (const model of MODELS) {
     try {
       const r = await fetch(
@@ -107,7 +112,7 @@ async function askGemini(userText, lang) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: SYSTEM }] },
-            contents: [{ role: "user", parts: [{ text: userText }] }],
+            contents,
             generationConfig: { maxOutputTokens: 2000 },
           }),
         }
@@ -133,11 +138,14 @@ async function getTgUser(chatId) {
     if (!r.ok) return null;
     const d = await r.json();
     const f = d.fields || {};
+    let hist = [];
+    try { hist = JSON.parse(f.history?.stringValue || "[]"); } catch (e) {}
     return {
       name: f.name?.stringValue || "",
       phone: f.phone?.stringValue || "",
       step: f.step?.stringValue || "",
       lang: f.lang?.stringValue || "uz",
+      history: hist,
     };
   } catch (e) { return null; }
 }
@@ -146,7 +154,7 @@ async function saveTgUser(chatId, fields) {
   try {
     const cur = await getTgUser(chatId) || {};
     const merged = { ...cur, ...fields };
-    await fetch(FS_BASE + "/tg_users/" + chatId + "?updateMask.fieldPaths=name&updateMask.fieldPaths=phone&updateMask.fieldPaths=step&updateMask.fieldPaths=lang", {
+    await fetch(FS_BASE + "/tg_users/" + chatId + "?updateMask.fieldPaths=name&updateMask.fieldPaths=phone&updateMask.fieldPaths=step&updateMask.fieldPaths=lang&updateMask.fieldPaths=history", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fields: {
@@ -154,6 +162,7 @@ async function saveTgUser(chatId, fields) {
         phone: { stringValue: merged.phone || "" },
         step: { stringValue: merged.step || "" },
         lang: { stringValue: merged.lang || "uz" },
+        history: { stringValue: JSON.stringify((merged.history || []).slice(-12)) },
       } }),
     });
   } catch (e) {}
@@ -218,6 +227,25 @@ export default async function handler(req, res) {
     const text = (msg.text || "").trim();
     const ADMIN = process.env.ADMIN_CHAT_ID;
     const isAdmin = ADMIN && String(chatId) === String(ADMIN);
+
+    const chatType = msg.chat.type; // private | group | supergroup
+    const isGroup = chatType === "group" || chatType === "supergroup";
+
+    // Guruhda: faqat "jay" so'zi bilan boshlansa yoki botga reply qilinsa javob beramiz
+    if (isGroup) {
+      const botReplied = msg.reply_to_message?.from?.is_bot;
+      const m = text.match(/^jay[,:\s]+([\s\S]+)/i);
+      if (!m && !botReplied) return res.status(200).json({ ok: true });
+      const q = m ? m[1].trim() : text;
+      await tg("sendChatAction", { chat_id: chatId, action: "typing" });
+      const reply = await askGemini(q, "uz");
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: reply.slice(0, 3900),
+        reply_to_message_id: msg.message_id,
+      });
+      return res.status(200).json({ ok: true });
+    }
 
     const u0 = await getTgUser(chatId);
     const lang = u0?.lang || "uz";
@@ -375,9 +403,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ===== Oddiy AI suhbat =====
+    // ===== Oddiy AI suhbat (xotira bilan) =====
     await tg("sendChatAction", { chat_id: chatId, action: "typing" });
-    const reply = await askGemini(text, lang);
+    const reply = await askGemini(text, lang, u0?.history);
+    // Suhbat tarixini yangilash
+    const newHist = [...(u0?.history || []), { role: "user", text }, { role: "assistant", text: reply }].slice(-12);
+    await saveTgUser(chatId, { history: newHist });
     for (let i = 0; i < reply.length; i += 4000) {
       await tg("sendMessage", { chat_id: chatId, text: reply.slice(i, i + 4000), reply_markup: KB });
     }
